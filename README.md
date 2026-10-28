@@ -10,7 +10,7 @@ diagrams as `.openflow.json` files in named projects, and an MCP server agents d
 ```
 npm i -g @hyperlab.sh/canvas
 canvas serve                     # http://127.0.0.1:43120
-claude mcp add -s user canvas -- canvas-mcp
+claude mcp add -s user canvas -- canvas mcp
 ```
 
 The `paint-a-picture` skill (`skills/`) teaches an agent to draw, connect to a diagram and answer canvas comments.

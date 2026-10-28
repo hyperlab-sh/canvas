@@ -19,6 +19,8 @@ npm install --omit=dev
 node bin/canvas.js serve
 ```
 
+Run `npx @hyperlab.sh/canvas` from another directory: inside this repo npx finds the local package and fails with `canvas: command not found`.
+
 Check the package contents before opening a PR that touches `files` or the build: `npm pack --dry-run`.
 
 ## Pull requests

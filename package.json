@@ -1,6 +1,6 @@
 {
   "name": "@hyperlab.sh/canvas",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A local diagram service for coding agents: projects of diagram files, a canvas editor in the browser, and an MCP server. Built from a fork of OpenFlowKit.",
   "keywords": [
     "mcp",
@@ -21,8 +21,7 @@
   "bugs": "https://github.com/hyperlab-sh/canvas/issues",
   "type": "module",
   "bin": {
-    "canvas": "./bin/canvas.js",
-    "canvas-mcp": "./bin/canvas-mcp.js"
+    "canvas": "./bin/canvas.js"
   },
   "files": [
     "bin",

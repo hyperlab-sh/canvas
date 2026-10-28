@@ -15,7 +15,7 @@ a state machine. Not a list, a single call, or what one sentence explains.
 
 ```
 npm i -g @hyperlab.sh/canvas
-claude mcp add -s user canvas -- canvas-mcp
+claude mcp add -s user canvas -- canvas mcp
 ```
 
 Start Claude Code with `OPENFLOWKIT_CHANNEL=1` in the environment if you want canvas comments pushed into the
