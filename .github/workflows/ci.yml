@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm run build
+
+      - run: npm install --omit=dev --no-audit --no-fund
+
+      - name: Pack lists only what should ship
+        run: |
+          npm pack --dry-run --json > pack.json
+          node -e "
+            const f = JSON.parse(require('fs').readFileSync('pack.json'))[0].files.map((x) => x.path);
+            const bad = f.filter((p) => p.endsWith('.map') || /^(openflowkit|scripts|node_modules)\//.test(p));
+            if (bad.length || !f.includes('app/index.html') || !f.includes('server/dist/cli.js')) {
+              console.error('unexpected pack contents', bad.slice(0, 10));
+              process.exit(1);
+            }
+            console.log(f.length + ' files');"
+
+      - run: npx --yes publint
+
+      - name: The service serves the bundled app
+        run: |
+          OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" node bin/canvas.js serve --port 43555 &
+          for i in $(seq 1 20); do curl -fs http://127.0.0.1:43555/ > /dev/null && exit 0; sleep 1; done
+          echo "service did not answer" >&2
+          exit 1

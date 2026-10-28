@@ -1,0 +1,11 @@
+node_modules/
+# build output, assembled by scripts/build.mjs
+server/
+app/
+*.tgz
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.env*

@@ -1,0 +1,53 @@
+{
+  "name": "@hyperlab.sh/canvas",
+  "version": "0.1.0",
+  "description": "A local diagram service for coding agents: projects of diagram files, a canvas editor in the browser, and an MCP server. Built from a fork of OpenFlowKit.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "diagram",
+    "canvas",
+    "agents",
+    "local-first",
+    "openflowkit"
+  ],
+  "author": "hyperlab-sh (https://github.com/hyperlab-sh)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hyperlab-sh/canvas.git"
+  },
+  "homepage": "https://github.com/hyperlab-sh/canvas#readme",
+  "bugs": "https://github.com/hyperlab-sh/canvas/issues",
+  "type": "module",
+  "bin": {
+    "canvas": "./bin/canvas.js",
+    "canvas-mcp": "./bin/canvas-mcp.js"
+  },
+  "files": [
+    "bin",
+    "server",
+    "app",
+    "skills",
+    ".claude-plugin",
+    "!**/*.map",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "elkjs": "^0.11.0",
+    "zod": "^3.23.0"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "canvas",
+  "description": "Paint diagrams for the user on a shared local canvas.",
+  "version": "0.1.0",
+  "skills": "./skills"
+}

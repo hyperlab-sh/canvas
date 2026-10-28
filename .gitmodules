@@ -1,0 +1,4 @@
+[submodule "openflowkit"]
+	path = openflowkit
+	url = https://github.com/hyperlab-sh/openflowkit.git
+	branch = main

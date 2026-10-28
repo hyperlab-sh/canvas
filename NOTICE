@@ -1,0 +1,4 @@
+@hyperlab.sh/canvas packages a build of a fork of OpenFlowKit
+(https://github.com/openflowkit/openflowkit), MIT licensed, included here as the
+`openflowkit` git submodule (https://github.com/hyperlab-sh/openflowkit).
+The original licence is in LICENSE.
