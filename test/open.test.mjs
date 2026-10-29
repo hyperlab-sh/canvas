@@ -28,7 +28,7 @@ describe('parseOpenArgs', () => {
   it('takes one target and --print', () => {
     assert.deepEqual(parseOpenArgs(['x', '--print']), { target: 'x', print: true, help: false, app: false, browser: false });
     assert.deepEqual(parseOpenArgs([]), { target: undefined, print: false, help: false, app: false, browser: false });
-    assert.equal(parseOpenArgs(['--app']).app, true);
+    assert.equal(parseOpenArgs(['--app', 'x']).app, true);
     assert.equal(parseOpenArgs(['--browser']).browser, true);
     assert.equal(parseOpenArgs(['-h']).help, true);
   });
@@ -85,10 +85,7 @@ describe('resolveTarget', () => {
 });
 
 describe('appUrl', () => {
-  it('encodes the project and the id, and falls back to the bare host', () => {
-    assert.equal(appUrl('my proj', 'a/b'), 'canvas://open/my%20proj/a%2Fb');
-    assert.equal(appUrl(undefined, undefined), 'canvas://open/');
-  });
+  it('encodes the project and the id', () => assert.equal(appUrl('my proj', 'a/b'), 'canvas://open/my%20proj/a%2Fb'));
 });
 
 describe('appInstalled', () => {
@@ -96,7 +93,7 @@ describe('appInstalled', () => {
   it('asks LaunchServices on macOS', () => {
     const a = answer(0);
     assert.equal(appInstalled('darwin', a.run), true);
-    assert.deepEqual(a.seen, [['open', '-Ra', 'Canvas']]);
+    assert.deepEqual(a.seen, [['open', '-Rb', 'sh.hyperlab.canvas']]);
     assert.equal(appInstalled('darwin', answer(1).run), false);
   });
   it('wants a non-empty handler from xdg-mime on Linux', () => {
@@ -218,12 +215,21 @@ describe('runOpen', () => {
     assert.deepEqual(h.calls.opened, [['open', 'canvas://open/notes/flow']]);
     assert.deepEqual(h.lines.out, ['canvas://open/notes/flow']);
   });
-  it('opens the app on the bare host when there is no diagram, still starting the service', async () => {
-    const h = harness({ detectApp: () => true });
+  it('opens the http home page without probing when there is no diagram', async () => {
+    let probed = false;
+    const h = harness({ detectApp: () => { probed = true; return true; } });
     h.setUp(false);
     assert.equal(await h.run([]), 0);
-    assert.deepEqual(h.calls.opened, [['open', 'canvas://open/']]);
+    assert.deepEqual(h.calls.opened, [['open', `${BASE}/`]]);
     assert.equal(h.calls.started.length, 1);
+    assert.equal(probed, false);
+  });
+  it('--app without a diagram is a usage error', async () => {
+    const h = harness({ detectApp: () => true });
+    assert.equal(await h.run(['--app']), 2);
+    assert.match(h.lines.err.join('\n'), /--app needs a diagram/);
+    assert.deepEqual(h.calls.opened, []);
+    assert.equal(await h.run(['--app', '--help']), 0);
   });
   it('opens the browser when the app is not detected', async () => {
     const h = harness({ detectApp: () => false });
@@ -269,7 +275,18 @@ describe('runOpen', () => {
   it('names the app when it will not start', async () => {
     const h = harness({ detectApp: () => true, opener: async () => false });
     assert.equal(await h.run(['notes/flow']), 1);
-    assert.match(h.lines.err.join('\n'), /could not start the app[\s\S]*canvas:\/\/open\/notes\/flow/);
+    assert.match(h.lines.err.join('\n'), /could not start the app[\s\S]*canvas:\/\/open\/notes\/flow[\s\S]*#\/p\/notes\/flow/);
+  });
+  it('falls back to the browser when a detected app will not start', async () => {
+    const h = harness({ detectApp: () => true, opener: async (command, args) => { h.calls.opened.push([command, ...args]); return !args[0].startsWith('canvas://'); } });
+    assert.equal(await h.run(['notes/flow']), 0);
+    assert.deepEqual(h.calls.opened, [['open', 'canvas://open/notes/flow'], ['open', `${BASE}/#/p/notes/flow`]]);
+    assert.deepEqual(h.lines.out, [`${BASE}/#/p/notes/flow`]);
+  });
+  it('does not fall back when --app was forced', async () => {
+    const h = harness({ detectApp: () => true, opener: async (command, args) => { h.calls.opened.push([command, ...args]); return !args[0].startsWith('canvas://'); } });
+    assert.equal(await h.run(['notes/flow', '--app']), 1);
+    assert.equal(h.calls.opened.length, 1);
   });
   it('prints usage for a bad argument and for --help', async () => {
     const h = harness();
