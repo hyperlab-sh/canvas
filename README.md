@@ -172,7 +172,7 @@ then:
 1. builds the standalone binaries for macOS, Linux and Windows (`scripts/package-native.mjs`, needs bun) and attaches
    them, with `SHA256SUMS`, to a GitHub release;
 2. renders the Homebrew formula (`scripts/render-formula.mjs`) and pushes it to `hyperlab-sh/homebrew-tap` when the
-   `HOMEBREW_TAP_TOKEN` secret is set;
+   `HOMEBREW_TAP_DEPLOY_KEY` secret (a write deploy key on the tap) is set;
 3. publishes the npm package through npm trusted publishing (the repo and `release.yml` are registered as the trusted
    publisher on npmjs.com, so no token is stored) with provenance.
 
