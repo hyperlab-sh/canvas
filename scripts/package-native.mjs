@@ -42,6 +42,9 @@ async function* assets(dir) {
   }
 }
 
+// The bundle inlines the runtime dependencies, so they must be installed beside server/ (the npm package gets them from its own install).
+if (!existsSync(join(ROOT, 'node_modules', '@modelcontextprotocol', 'sdk'))) run('npm', ['install', '--omit=dev', '--no-audit', '--no-fund']);
+
 // One bundle for every target: the CLI with its dependencies inlined, so nothing has to be installed beside it.
 // bun defines `self`, which makes elkjs mistake the process for a web worker; deleting it first keeps layout working.
 const work = join(ROOT, 'native-build');
