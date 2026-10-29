@@ -65,6 +65,12 @@ jobs:
       - name: Every target compiles
         run: bun scripts/package-native.mjs darwin-arm64 darwin-x64 linux-x64 linux-arm64 windows-x64
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: release/*
+          if-no-files-found: error
+
       - name: Installer scripts are valid
         run: shellcheck install.sh
 
@@ -82,3 +88,8 @@ jobs:
           for _ in $(seq 1 20); do curl -fs http://127.0.0.1:43556/ > /dev/null && exit 0; sleep 1; done
           echo "binary did not serve the app" >&2
           exit 1
+
+  # Dry run of the release packaging: builds the .deb/.rpm and installs them in clean distro containers; publishes nothing.
+  packages:
+    needs: native
+    uses: ./.github/workflows/packages.yml

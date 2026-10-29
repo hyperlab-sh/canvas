@@ -1,0 +1,79 @@
+name: Linux packages
+
+# Builds the canvas .deb and .rpm from the release archives and installs them in clean distro containers.
+# Called by ci.yml (every PR) and release.yml; it never publishes, the caller attaches the "packages" artifact.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release
+
+      - name: Install nfpm
+        env:
+          NFPM_VERSION: 2.48.0
+        run: |
+          curl -fsSL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz" -o "$RUNNER_TEMP/nfpm.tgz"
+          curl -fsSL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/checksums.txt" -o "$RUNNER_TEMP/nfpm-checksums.txt"
+          (cd "$RUNNER_TEMP" && grep " nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz\$" nfpm-checksums.txt | sed 's/ nfpm_.*/  nfpm.tgz/' | sha256sum -c -)
+          mkdir -p "$RUNNER_TEMP/nfpm-bin"
+          tar -xzf "$RUNNER_TEMP/nfpm.tgz" -C "$RUNNER_TEMP/nfpm-bin" nfpm
+          echo "$RUNNER_TEMP/nfpm-bin" >> "$GITHUB_PATH"
+
+      - name: Build the packages
+        run: node packaging/nfpm/build.mjs --release release --out packages
+
+      - name: Four packages with the distro names
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          for f in "canvas_${version}_amd64.deb" "canvas_${version}_arm64.deb" "canvas-${version}-1.x86_64.rpm" "canvas-${version}-1.aarch64.rpm"; do
+            test -s "packages/$f" || { echo "missing $f" >&2; exit 1; }
+          done
+          ls -l packages
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: packages/*
+          if-no-files-found: error
+
+  install:
+    needs: build
+    name: install (${{ matrix.image }}, ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        image: [debian:stable, ubuntu:24.04, fedora:latest, opensuse/tumbleweed]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: packages
+
+      - name: Install, run and remove in a clean container
+        run: |
+          version="$(jq -r .version package.json)"
+          docker run --rm -v "$PWD/packages:/packages:ro" -v "$PWD/packaging/nfpm/test-install.sh:/test-install.sh:ro" "${{ matrix.image }}" sh /test-install.sh "$version" /packages

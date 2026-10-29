@@ -1,0 +1,38 @@
+# nfpm config for the `canvas` CLI/service package, rendered by build.mjs (which sets the environment variables).
+#   CANVAS_VERSION  package version, e.g. 0.4.0
+#   CANVAS_ARCH     amd64 | arm64 (nfpm maps it to x86_64 | aarch64 for rpm)
+#   CANVAS_RELEASE  rpm release ("1"); empty for deb, which has no revision in its name
+#   CANVAS_STAGE    the extracted release archive (bin/, share/, LICENSE, NOTICE, README.md)
+name: canvas
+arch: ${CANVAS_ARCH}
+platform: linux
+version: ${CANVAS_VERSION}
+release: ${CANVAS_RELEASE}
+section: devel
+priority: optional
+maintainer: hyperlab-sh <https://github.com/hyperlab-sh>
+description: |
+  A local diagram service for coding agents.
+  Projects of diagram files, a canvas editor in the browser, an MCP server and a CLI.
+  Run `canvas service install` to keep the service running in the background.
+vendor: hyperlab-sh
+homepage: https://github.com/hyperlab-sh/canvas
+license: MIT
+contents:
+  # The archive layout (bin/ and share/) lives under /usr/lib/canvas: the binary finds share/ relative to its real path.
+  - src: ${CANVAS_STAGE}/bin/canvas
+    dst: /usr/lib/canvas/bin/canvas
+    file_info:
+      mode: 0755
+  - src: ${CANVAS_STAGE}/share
+    dst: /usr/lib/canvas/share
+    type: tree
+  - src: /usr/lib/canvas/bin/canvas
+    dst: /usr/bin/canvas
+    type: symlink
+  - src: ${CANVAS_STAGE}/LICENSE
+    dst: /usr/share/doc/canvas/LICENSE
+  - src: ${CANVAS_STAGE}/NOTICE
+    dst: /usr/share/doc/canvas/NOTICE
+  - src: ${CANVAS_STAGE}/README.md
+    dst: /usr/share/doc/canvas/README.md
