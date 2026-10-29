@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { browserCommand, diagramUrl, parseOpenArgs, resolveTarget, runOpen } from '../lib/open.js';
+import { appInstalled, appUrl, browserCommand, diagramUrl, parseOpenArgs, resolveTarget, runOpen } from '../lib/open.js';
 
 const BASE = 'http://127.0.0.1:43120';
 
@@ -26,14 +26,17 @@ function tree() {
 
 describe('parseOpenArgs', () => {
   it('takes one target and --print', () => {
-    assert.deepEqual(parseOpenArgs(['x', '--print']), { target: 'x', print: true, help: false });
-    assert.deepEqual(parseOpenArgs([]), { target: undefined, print: false, help: false });
+    assert.deepEqual(parseOpenArgs(['x', '--print']), { target: 'x', print: true, help: false, app: false, browser: false });
+    assert.deepEqual(parseOpenArgs([]), { target: undefined, print: false, help: false, app: false, browser: false });
+    assert.equal(parseOpenArgs(['--app']).app, true);
+    assert.equal(parseOpenArgs(['--browser']).browser, true);
     assert.equal(parseOpenArgs(['-h']).help, true);
   });
   it('rejects a second target and unknown flags', () => {
     assert.match(parseOpenArgs(['a', 'b']).error, /one diagram/);
-    assert.match(parseOpenArgs(['--app']).error, /unknown argument "--app"/);
+    assert.match(parseOpenArgs(['--nope']).error, /unknown argument "--nope"/);
   });
+  it('rejects --app together with --browser', () => assert.match(parseOpenArgs(['--app', '--browser']).error, /cannot be combined/));
 });
 
 describe('diagramUrl', () => {
@@ -81,6 +84,39 @@ describe('resolveTarget', () => {
   });
 });
 
+describe('appUrl', () => {
+  it('encodes the project and the id, and falls back to the bare host', () => {
+    assert.equal(appUrl('my proj', 'a/b'), 'canvas://open/my%20proj/a%2Fb');
+    assert.equal(appUrl(undefined, undefined), 'canvas://open/');
+  });
+});
+
+describe('appInstalled', () => {
+  const answer = (code, stdout = '') => { const seen = []; return { seen, run: (command, args) => { seen.push([command, ...args]); return { code, stdout }; } }; };
+  it('asks LaunchServices on macOS', () => {
+    const a = answer(0);
+    assert.equal(appInstalled('darwin', a.run), true);
+    assert.deepEqual(a.seen, [['open', '-Ra', 'Canvas']]);
+    assert.equal(appInstalled('darwin', answer(1).run), false);
+  });
+  it('wants a non-empty handler from xdg-mime on Linux', () => {
+    const a = answer(0, 'canvas-app.desktop\n');
+    assert.equal(appInstalled('linux', a.run), true);
+    assert.deepEqual(a.seen, [['xdg-mime', 'query', 'default', 'x-scheme-handler/canvas']]);
+    assert.equal(appInstalled('linux', answer(0, '\n').run), false);
+    assert.equal(appInstalled('linux', answer(1, 'x').run), false);
+  });
+  it('tries HKCU then HKCR on Windows', () => {
+    const seen = [];
+    assert.equal(appInstalled('win32', (command, args) => { seen.push(args[1]); return { code: args[1].startsWith('HKCR') ? 0 : 1, stdout: '' }; }), true);
+    assert.deepEqual(seen, ['HKCU\\Software\\Classes\\canvas', 'HKCR\\canvas']);
+    assert.equal(appInstalled('win32', answer(1).run), false);
+  });
+  it('treats a missing probe command as not installed', () => {
+    assert.equal(appInstalled('linux', () => { throw new Error('ENOENT'); }), false);
+  });
+});
+
 describe('browserCommand', () => {
   it('uses the platform opener', () => {
     assert.deepEqual(browserCommand('darwin', 'u'), ['open', ['u']]);
@@ -102,6 +138,7 @@ function harness(overrides = {}) {
       if (url.endsWith('/projects')) return { json: async () => projects };
       throw new Error(`unexpected ${url}`);
     },
+    detectApp: () => false,
     opener: async (command, args) => { calls.opened.push([command, ...args]); return true; },
     start: (program, port) => { calls.started.push([program, port]); up = true; },
     out: (text) => lines.out.push(text), err: (text) => lines.err.push(text),
@@ -169,6 +206,59 @@ describe('runOpen', () => {
     const blocked = harness({ opener: async () => false });
     assert.equal(await blocked.run(['notes/flow']), 1);
     assert.match(blocked.lines.err.join('\n'), /could not start a browser \(open\)[\s\S]*#\/p\/notes\/flow/);
+  });
+  it('opens the app by default when it is detected', async () => {
+    const h = harness({ detectApp: () => true });
+    assert.equal(await h.run(['notes/flow']), 0);
+    assert.deepEqual(h.calls.opened, [['open', 'canvas://open/notes/flow']]);
+    assert.deepEqual(h.lines.out, ['canvas://open/notes/flow']);
+  });
+  it('opens the app on the bare host when there is no diagram, still starting the service', async () => {
+    const h = harness({ detectApp: () => true });
+    h.setUp(false);
+    assert.equal(await h.run([]), 0);
+    assert.deepEqual(h.calls.opened, [['open', 'canvas://open/']]);
+    assert.equal(h.calls.started.length, 1);
+  });
+  it('opens the browser when the app is not detected', async () => {
+    const h = harness({ detectApp: () => false });
+    assert.equal(await h.run(['notes/flow']), 0);
+    assert.deepEqual(h.calls.opened, [['open', `${BASE}/#/p/notes/flow`]]);
+  });
+  it('--app without the app is an error and opens nothing', async () => {
+    const h = harness({ detectApp: () => false });
+    assert.equal(await h.run(['notes/flow', '--app']), 1);
+    assert.match(h.lines.err.join('\n'), /desktop app is not installed/);
+    assert.deepEqual(h.calls.opened, []);
+  });
+  it('--app opens the app when it is installed', async () => {
+    const h = harness({ detectApp: () => true });
+    assert.equal(await h.run(['--app', 'notes/flow']), 0);
+    assert.deepEqual(h.calls.opened, [['open', 'canvas://open/notes/flow']]);
+  });
+  it('--browser opens http even when the app is installed, without probing', async () => {
+    let probed = false;
+    const h = harness({ detectApp: () => { probed = true; return true; } });
+    assert.equal(await h.run(['notes/flow', '--browser']), 0);
+    assert.deepEqual(h.calls.opened, [['open', `${BASE}/#/p/notes/flow`]]);
+    assert.equal(probed, false);
+  });
+  it('--app with --browser is a usage error', async () => {
+    const h = harness({ detectApp: () => true });
+    assert.equal(await h.run(['--app', '--browser']), 2);
+    assert.match(h.lines.err.join('\n'), /cannot be combined/);
+    assert.deepEqual(h.calls.opened, []);
+  });
+  it('--print still writes the http link when the app is installed', async () => {
+    const h = harness({ detectApp: () => true });
+    assert.equal(await h.run(['notes/flow', '--print']), 0);
+    assert.deepEqual(h.lines.out, [`${BASE}/#/p/notes/flow`]);
+    assert.deepEqual(h.calls.opened, []);
+  });
+  it('names the app when it will not start', async () => {
+    const h = harness({ detectApp: () => true, opener: async () => false });
+    assert.equal(await h.run(['notes/flow']), 1);
+    assert.match(h.lines.err.join('\n'), /could not start the app[\s\S]*canvas:\/\/open\/notes\/flow/);
   });
   it('prints usage for a bad argument and for --help', async () => {
     const h = harness();

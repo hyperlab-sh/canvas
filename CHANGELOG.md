@@ -7,7 +7,7 @@ All notable changes are listed here, newest first. The format follows
 ## [Unreleased]
 
 ### Added
-- `canvas open [diagram] [--print]` opens a diagram (a file, `project/id`, or an id or title) in the default browser and starts the service when nothing answers.
+- `canvas open [diagram] [--app|--browser] [--print]` opens a diagram (a file, `project/id`, or an id or title) in the desktop app when it is installed (through its `canvas://` link) and in the default browser otherwise, and starts the service when nothing answers. `--app` and `--browser` force one; `--print` still writes the http link.
 
 ## [0.3.0]
 
