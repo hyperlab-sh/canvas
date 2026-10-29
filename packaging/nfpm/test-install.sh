@@ -54,5 +54,5 @@ rm -rf "$tmp"
 
 remove
 [ ! -e /usr/bin/canvas ] && [ ! -L /usr/bin/canvas ] || fail "/usr/bin/canvas remains after removal"
-[ ! -e /usr/lib/canvas ] || fail "/usr/lib/canvas remains after removal"
+[ ! -e /usr/lib/canvas ] || { find /usr/lib/canvas | head -20; fail "/usr/lib/canvas remains after removal"; }
 echo "ok"

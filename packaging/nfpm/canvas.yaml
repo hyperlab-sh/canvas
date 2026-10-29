@@ -20,6 +20,11 @@ homepage: https://github.com/hyperlab-sh/canvas
 license: MIT
 contents:
   # The archive layout (bin/ and share/) lives under /usr/lib/canvas: the binary finds share/ relative to its real path.
+  # rpm removes only the directories it owns, so the install root is listed explicitly.
+  - dst: /usr/lib/canvas
+    type: dir
+  - dst: /usr/lib/canvas/bin
+    type: dir
   - src: ${CANVAS_STAGE}/bin/canvas
     dst: /usr/lib/canvas/bin/canvas
     file_info:
