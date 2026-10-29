@@ -2,7 +2,7 @@
 #   CANVAS_VERSION  package version, e.g. 0.4.0
 #   CANVAS_ARCH     amd64 | arm64 (nfpm maps it to x86_64 | aarch64 for rpm)
 #   CANVAS_RELEASE  rpm release ("1"); empty for deb, which has no revision in its name
-#   CANVAS_STAGE    the extracted release archive (bin/, share/, LICENSE, NOTICE, README.md)
+# ${CANVAS_STAGE} (the extracted release archive: bin/, share/, LICENSE, NOTICE, README.md) is substituted by build.mjs itself.
 name: canvas
 arch: ${CANVAS_ARCH}
 platform: linux
