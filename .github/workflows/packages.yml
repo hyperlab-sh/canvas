@@ -45,6 +45,13 @@ jobs:
           done
           ls -l packages
 
+      # One SHA256SUMS for the archives and the packages; install.sh and the formula read it by file name.
+      - name: Checksum every asset
+        run: |
+          (cd release && sha256sum canvas-*.tar.gz canvas-*.zip) > packages/SHA256SUMS
+          (cd packages && sha256sum canvas_*.deb canvas-*.rpm) >> packages/SHA256SUMS
+          cat packages/SHA256SUMS
+
       - uses: actions/upload-artifact@v4
         with:
           name: packages
@@ -68,6 +75,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - uses: actions/download-artifact@v4
         with:
           name: packages
@@ -75,5 +86,5 @@ jobs:
 
       - name: Install, run and remove in a clean container
         run: |
-          version="$(jq -r .version package.json)"
+          version="$(node -p "require('./package.json').version")"
           docker run --rm -v "$PWD/packages:/packages:ro" -v "$PWD/packaging/nfpm/test-install.sh:/test-install.sh:ro" "${{ matrix.image }}" sh /test-install.sh "$version" /packages

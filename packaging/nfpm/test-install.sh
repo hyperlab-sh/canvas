@@ -44,13 +44,26 @@ echo "installed $pkg ($kind)"
 
 out="$(canvas --version)"
 echo "canvas --version: $out"
-# The CLI reports the editor fork's own version, which is not the package version, so only its shape is checked.
-case "$out" in "canvas "[0-9]*.[0-9]*.[0-9]*) ;; *) fail "--version printed \"$out\"" ;; esac
+[ "$out" = "canvas $version" ] || fail "--version printed \"$out\", want \"canvas $version\""
 
 tmp="$(mktemp -d)"
 printf 'graph LR\n A-->B\n' > "$tmp/a.mmd"
 canvas render "$tmp/a.mmd" -o "$tmp/a.svg"
 grep -q '<svg' "$tmp/a.svg" || fail "render wrote no svg"
+
+# The editor is served from /usr/lib/canvas/share/canvas/app, found through the /usr/bin symlink.
+if ! command -v curl >/dev/null 2>&1; then
+  case "$kind" in
+    deb) apt-get install -y -qq curl ;;
+    *) if command -v dnf >/dev/null 2>&1; then dnf install -y -q curl; else zypper --non-interactive install curl || [ $? -eq 106 ]; fi ;;
+  esac
+fi
+OPENFLOWKIT_SERVICE_CONFIG="$tmp/service.json" canvas serve --port 43557 >"$tmp/serve.log" 2>&1 &
+serve_pid=$!
+curl -fs --retry 30 --retry-connrefused --retry-delay 1 -o "$tmp/index.html" http://127.0.0.1:43557/ || { cat "$tmp/serve.log"; fail "canvas serve did not serve the app"; }
+grep -qi '<html' "$tmp/index.html" || fail "the served page is not the editor"
+kill "$serve_pid"
+wait "$serve_pid" 2>/dev/null || true
 rm -rf "$tmp"
 
 remove
