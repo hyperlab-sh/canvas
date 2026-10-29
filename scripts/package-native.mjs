@@ -68,7 +68,7 @@ for (const target of targets) {
   await mkdir(join(stage, 'bin'), { recursive: true });
   await cp(join(work, 'share'), join(stage, 'share'), { recursive: true });
   for (const doc of ['LICENSE', 'NOTICE', 'README.md']) await cp(join(ROOT, doc), join(stage, doc));
-  run('bun', ['build', '--compile', `--target=bun-${target}`, 'bin/canvas-native.js', `--outfile=${join(stage, 'bin', windows ? 'canvas.exe' : 'canvas')}`]);
+  run('bun', ['build', '--compile', `--target=bun-${target}`, `--define=__CANVAS_VERSION__=${JSON.stringify(version)}`, 'bin/canvas-native.js', `--outfile=${join(stage, 'bin', windows ? 'canvas.exe' : 'canvas')}`]);
 
   const archive = `canvas-${version}-${target}.${windows ? 'zip' : 'tar.gz'}`;
   const entries = ['bin', 'share', 'LICENSE', 'NOTICE', 'README.md'];

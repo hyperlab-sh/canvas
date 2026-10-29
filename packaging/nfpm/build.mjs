@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..', '..');
 
-export const RPM_RELEASE = '1';
+const RPM_RELEASE = '1';
 const ARCHES = [
   { archive: 'x64', deb: 'amd64', rpm: 'x86_64' },
   { archive: 'arm64', deb: 'arm64', rpm: 'aarch64' },
@@ -19,7 +19,7 @@ const ARCHES = [
 
 /** The release archive and the two package file names for one architecture. */
 export function packageNames(version, arch) {
-  const a = ARCHES.find((x) => x.archive === arch || x.deb === arch);
+  const a = ARCHES.find((x) => x.archive === arch);
   if (!a) throw new Error(`unknown architecture "${arch}"`);
   return {
     archive: `canvas-${version}-linux-${a.archive}.tar.gz`,
@@ -29,6 +29,11 @@ export function packageNames(version, arch) {
   };
 }
 
+/** The nfpm config for one extracted archive: nfpm does not expand environment variables in contents[].src, so the stage path is substituted here. */
+export function renderConfig(stage) {
+  return readFileSync(join(HERE, 'canvas.yaml'), 'utf8').replaceAll('${CANVAS_STAGE}', stage);
+}
+
 function run(command, args, env = {}) {
   const result = spawnSync(command, args, { stdio: 'inherit', env: { ...process.env, ...env } });
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed (exit ${result.status})`);
@@ -36,7 +41,12 @@ function run(command, args, env = {}) {
 
 function main() {
   const argv = process.argv.slice(2);
-  const option = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
+  const option = (name, fallback) => {
+    const i = argv.indexOf(name);
+    if (i < 0) return fallback;
+    if (argv[i + 1] === undefined || argv[i + 1].startsWith('--')) throw new Error(`missing value for ${name}`);
+    return argv[i + 1];
+  };
   const releaseDir = resolve(ROOT, option('--release', 'release'));
   const outDir = resolve(ROOT, option('--out', 'release'));
   const { version } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
@@ -49,9 +59,8 @@ function main() {
       const stage = join(work, cpu);
       mkdirSync(stage);
       run('tar', ['-xzf', join(releaseDir, names.archive), '-C', stage]);
-      // nfpm expands environment variables in its metadata fields but not in contents[].src, so the stage path is substituted here.
       const config = join(work, `canvas-${cpu}.yaml`);
-      writeFileSync(config, readFileSync(join(HERE, 'canvas.yaml'), 'utf8').replaceAll('${CANVAS_STAGE}', stage));
+      writeFileSync(config, renderConfig(stage));
       const env = { CANVAS_VERSION: version, CANVAS_ARCH: names.nfpmArch };
       run('nfpm', ['package', '--config', config, '--packager', 'deb', '--target', join(outDir, names.deb)], { ...env, CANVAS_RELEASE: '' });
       run('nfpm', ['package', '--config', config, '--packager', 'rpm', '--target', join(outDir, names.rpm)], { ...env, CANVAS_RELEASE: RPM_RELEASE });
