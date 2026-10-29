@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { appInstalled, appUrl, browserCommand, diagramUrl, parseOpenArgs, resolveTarget, runOpen } from '../lib/open.js';
+import { appInstalled, appUrl, browserCommand, diagramUrl, parseOpenArgs, probeResult, resolveTarget, runOpen } from '../lib/open.js';
 
 const BASE = 'http://127.0.0.1:43120';
 
@@ -111,6 +111,11 @@ describe('appInstalled', () => {
     assert.equal(appInstalled('win32', (command, args) => { seen.push(args[1]); return { code: args[1].startsWith('HKCR') ? 0 : 1, stdout: '' }; }), true);
     assert.deepEqual(seen, ['HKCU\\Software\\Classes\\canvas', 'HKCR\\canvas']);
     assert.equal(appInstalled('win32', answer(1).run), false);
+  });
+  it('counts a probe killed by the timeout (no status) as failed', () => {
+    assert.deepEqual(probeResult({ status: null, stdout: null }), { code: 1, stdout: '' });
+    assert.deepEqual(probeResult({ status: 0, stdout: 'x' }), { code: 0, stdout: 'x' });
+    assert.equal(appInstalled('darwin', () => probeResult({ status: null })), false);
   });
   it('treats a missing probe command as not installed', () => {
     assert.equal(appInstalled('linux', () => { throw new Error('ENOENT'); }), false);
@@ -252,6 +257,12 @@ describe('runOpen', () => {
   it('--print still writes the http link when the app is installed', async () => {
     const h = harness({ detectApp: () => true });
     assert.equal(await h.run(['notes/flow', '--print']), 0);
+    assert.deepEqual(h.lines.out, [`${BASE}/#/p/notes/flow`]);
+    assert.deepEqual(h.calls.opened, []);
+  });
+  it('--print ignores --app even when the app is missing', async () => {
+    const h = harness({ detectApp: () => false });
+    assert.equal(await h.run(['notes/flow', '--app', '--print']), 0);
     assert.deepEqual(h.lines.out, [`${BASE}/#/p/notes/flow`]);
     assert.deepEqual(h.calls.opened, []);
   });
