@@ -29,7 +29,7 @@ jobs:
         run: |
           curl -fsSL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz" -o "$RUNNER_TEMP/nfpm.tgz"
           curl -fsSL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/checksums.txt" -o "$RUNNER_TEMP/nfpm-checksums.txt"
-          (cd "$RUNNER_TEMP" && grep " nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz\$" nfpm-checksums.txt | sed 's/ nfpm_.*/  nfpm.tgz/' | sha256sum -c -)
+          (cd "$RUNNER_TEMP" && awk -v f="nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz" '$2 == f { print $1 "  nfpm.tgz" }' nfpm-checksums.txt | sha256sum -c -)
           mkdir -p "$RUNNER_TEMP/nfpm-bin"
           tar -xzf "$RUNNER_TEMP/nfpm.tgz" -C "$RUNNER_TEMP/nfpm-bin" nfpm
           echo "$RUNNER_TEMP/nfpm-bin" >> "$GITHUB_PATH"
