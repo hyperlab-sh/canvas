@@ -8,21 +8,28 @@ version="$1"
 dir="$2"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
+# The directory holds the packages of both architectures; take this machine's.
+case "$(uname -m)" in
+  x86_64) deb_arch=amd64; rpm_arch=x86_64 ;;
+  aarch64|arm64) deb_arch=arm64; rpm_arch=aarch64 ;;
+  *) fail "unsupported machine $(uname -m)" ;;
+esac
+
 if command -v apt-get >/dev/null 2>&1; then
   kind=deb
-  pkg="$(ls "$dir"/canvas_"$version"_*.deb)"
+  pkg="$(ls "$dir"/canvas_"$version"_"$deb_arch".deb)"
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
   apt-get install -y -qq "$pkg"
   remove() { apt-get remove -y -qq canvas; }
 elif command -v dnf >/dev/null 2>&1; then
   kind=rpm
-  pkg="$(ls "$dir"/canvas-"$version"-1.*.rpm)"
+  pkg="$(ls "$dir"/canvas-"$version"-1."$rpm_arch".rpm)"
   dnf install -y -q "$pkg"
   remove() { dnf remove -y -q canvas; }
 elif command -v zypper >/dev/null 2>&1; then
   kind=rpm
-  pkg="$(ls "$dir"/canvas-"$version"-1.*.rpm)"
+  pkg="$(ls "$dir"/canvas-"$version"-1."$rpm_arch".rpm)"
   # The local package is unsigned; repo signing is the pkg-repos concern.
   zypper --non-interactive --no-gpg-checks install "$pkg"
   remove() { zypper --non-interactive remove canvas; }
