@@ -3,7 +3,7 @@
 // Reads canvas-<version>-linux-<x64|arm64>.tar.gz from --release, writes canvas_<v>_<amd64|arm64>.deb and
 // canvas-<v>-1.<x86_64|aarch64>.rpm to --out. Needs `nfpm` on PATH and GNU or bsd tar.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -49,9 +49,12 @@ function main() {
       const stage = join(work, cpu);
       mkdirSync(stage);
       run('tar', ['-xzf', join(releaseDir, names.archive), '-C', stage]);
-      const env = { CANVAS_VERSION: version, CANVAS_ARCH: names.nfpmArch, CANVAS_STAGE: stage };
-      run('nfpm', ['package', '--config', join(HERE, 'canvas.yaml'), '--packager', 'deb', '--target', join(outDir, names.deb)], { ...env, CANVAS_RELEASE: '' });
-      run('nfpm', ['package', '--config', join(HERE, 'canvas.yaml'), '--packager', 'rpm', '--target', join(outDir, names.rpm)], { ...env, CANVAS_RELEASE: RPM_RELEASE });
+      // nfpm expands environment variables in its metadata fields but not in contents[].src, so the stage path is substituted here.
+      const config = join(work, `canvas-${cpu}.yaml`);
+      writeFileSync(config, readFileSync(join(HERE, 'canvas.yaml'), 'utf8').replaceAll('${CANVAS_STAGE}', stage));
+      const env = { CANVAS_VERSION: version, CANVAS_ARCH: names.nfpmArch };
+      run('nfpm', ['package', '--config', config, '--packager', 'deb', '--target', join(outDir, names.deb)], { ...env, CANVAS_RELEASE: '' });
+      run('nfpm', ['package', '--config', config, '--packager', 'rpm', '--target', join(outDir, names.rpm)], { ...env, CANVAS_RELEASE: RPM_RELEASE });
       console.log(`[nfpm] ${names.deb} ${names.rpm}`);
     }
   } finally {
