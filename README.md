@@ -27,6 +27,8 @@ npx @hyperlab.sh/canvas serve        # or: bunx @hyperlab.sh/canvas serve
 Open http://127.0.0.1:43120. The service listens on the loopback address only and refuses requests from other hosts and
 other websites.
 
+`bunx` caches what it resolves for `latest`, so after a release it can keep running the old version. Name the version (`bunx @hyperlab.sh/canvas@0.2.0 serve`) or clear it with `bun pm cache rm`; `npx` does not do this.
+
 For daily use install it once, so that `canvas` is a command and the background service can find it:
 
 ```sh
