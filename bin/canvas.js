@@ -4,6 +4,7 @@
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runCli } from '../lib/launch.js';
+import { runOpen } from '../lib/open.js';
 import { runService } from '../lib/service.js';
 
 const args = process.argv.slice(2);
@@ -11,6 +12,10 @@ const self = realpathSync(fileURLToPath(import.meta.url));
 
 if (args[0] === 'service') {
   process.exit(await runService(args.slice(1), { script: self }));
+}
+
+if (args[0] === 'open') {
+  process.exit(await runOpen(args.slice(1), { program: [process.execPath, self] }));
 }
 
 const command = process.versions.bun ? [process.execPath, '--preload', fileURLToPath(new URL('../lib/hide-self.js', import.meta.url))] : [process.execPath];

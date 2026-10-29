@@ -6,6 +6,9 @@ All notable changes are listed here, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+- `canvas open [diagram] [--print]` opens a diagram (a file, `project/id`, or an id or title) in the default browser and starts the service when nothing answers.
+
 ## [0.3.0]
 
 ### Added

@@ -43,7 +43,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test test/service.test.mjs",
+    "test": "node --test test/*.test.mjs",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

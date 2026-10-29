@@ -147,6 +147,7 @@ also a Claude Code plugin (`.claude-plugin/plugin.json`).
 | Command | What it does |
 |---|---|
 | `canvas serve [--port N] [--config path] [--app dir]` | Run the service and the editor in the foreground. |
+| `canvas open [diagram] [--print]` | Open a diagram in your browser, starting the service if needed. `diagram` is a `.openflow.json` file in a project folder, `project/id`, or a diagram id or title; with none the home page opens. `--print` writes the link instead. |
 | `canvas service <install\|status\|restart\|logs\|uninstall>` | Run it in the background. |
 | `canvas mcp` | The MCP server on stdio, for agents. |
 | `canvas render <file> -o out.svg` | Mermaid, D2, Structurizr or OpenFlow DSL to SVG. |
