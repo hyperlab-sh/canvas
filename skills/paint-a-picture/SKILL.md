@@ -18,6 +18,8 @@ npm i -g @hyperlab.sh/canvas
 claude mcp add -s user canvas -- canvas mcp
 ```
 
+To have the service always running (macOS and Linux): `canvas service install`.
+
 Start Claude Code with `OPENFLOWKIT_CHANNEL=1` in the environment if you want canvas comments pushed into the
 session; without it, read them with `list_threads`. The MCP server starts the service (`canvas serve`,
 127.0.0.1:43120) itself when it is not running.

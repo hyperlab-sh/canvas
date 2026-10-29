@@ -6,6 +6,7 @@ Wrapper repo: builds the `openflowkit` submodule (a fork, tracked on its `main`)
 - `npm run build`: `npm ci` + app build + mcp-server build in the submodule, then assembles `server/` and `app/`
   (gitignored). The submodule is an npm workspace: never run `npm ci` inside `openflowkit/mcp-server`.
 - `bin/canvas.js` is the only bin (`canvas serve`, `canvas mcp`, ...) and spawns `server/dist/cli.js`, which only runs as an entry point. Keep it the only bin: `bunx @hyperlab.sh/canvas` cannot pick between two.
+- `lib/service.js` is `canvas service` (launchd/systemd units, pure generators plus an injectable runner); `npm test` covers it. `bin/canvas.js` handles `service` itself and appends it to the top-level help.
 - `package.json` `dependencies` must equal the submodule's `mcp-server` dependencies; the build fails on drift.
 - Check the package with `npm pack --dry-run` before changing `files`.
 - Releases: tag `vX.Y.Z`; the Release workflow publishes through npm trusted publishing (the first publish was manual).

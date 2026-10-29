@@ -6,6 +6,15 @@ All notable changes are listed here, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.2.0]
+
+### Added
+- `canvas service install|status|restart|logs|uninstall`: run the service in the background as a launchd agent (macOS) or a systemd user unit (Linux), started at every login.
+
+### Changed
+- Help, command help, `--version` and errors name the command `canvas`, not `openflowkit` (fork PR #13, `OPENFLOWKIT_CLI_NAME`).
+- README documents installing, the background service, projects, configuration and the commands.
+
 ## [0.1.1]
 
 ### Fixed

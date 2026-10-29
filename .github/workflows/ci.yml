@@ -18,6 +18,8 @@ jobs:
         with:
           node-version: 22
 
+      - run: npm test
+
       - run: npm run build
 
       - run: npm install --omit=dev --no-audit --no-fund
