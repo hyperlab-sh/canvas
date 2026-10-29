@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "local",
+  "description": "The bundled 'service not running' page.",
+  "windows": ["main"],
+  "permissions": ["core:default", "allow-probe", "allow-start-service", "allow-open-service"]
+}
