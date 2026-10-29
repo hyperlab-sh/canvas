@@ -1,6 +1,6 @@
 {
   "name": "@hyperlab.sh/canvas",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A local diagram service for coding agents: projects of diagram files, a canvas editor in the browser, and an MCP server. Built from a fork of OpenFlowKit.",
   "keywords": [
     "mcp",

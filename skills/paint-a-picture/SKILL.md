@@ -14,7 +14,7 @@ a state machine. Not a list, a single call, or what one sentence explains.
 ## Setup (once)
 
 ```
-npm i -g @hyperlab.sh/canvas
+brew install hyperlab-sh/tap/canvas      # or: npm i -g @hyperlab.sh/canvas (needs Node), or the install script in the README
 claude mcp add -s user canvas -- canvas mcp
 ```
 

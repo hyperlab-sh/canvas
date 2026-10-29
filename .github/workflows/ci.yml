@@ -41,6 +41,44 @@ jobs:
       - name: The service serves the bundled app
         run: |
           OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" node bin/canvas.js serve --port 43555 &
-          for i in $(seq 1 20); do curl -fs http://127.0.0.1:43555/ > /dev/null && exit 0; sleep 1; done
+          for _ in $(seq 1 20); do curl -fs http://127.0.0.1:43555/ > /dev/null && exit 0; sleep 1; done
           echo "service did not answer" >&2
+          exit 1
+
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - run: npm run build
+
+      - name: Every target compiles
+        run: bun scripts/package-native.mjs darwin-arm64 darwin-x64 linux-x64 linux-arm64 windows-x64
+
+      - name: Installer scripts are valid
+        run: shellcheck install.sh
+
+      - name: The Linux binary runs without node or bun on PATH
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          home="$RUNNER_TEMP/canvas-home"
+          CANVAS_HOME="$home" CANVAS_BIN_DIR="$RUNNER_TEMP/bin" CANVAS_VERSION="$version" CANVAS_DOWNLOAD_BASE="file://$PWD/release" sh install.sh
+          # Only the system tools remain: the binary carries its own runtime.
+          env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$RUNNER_TEMP/bin/canvas" --version
+          printf 'graph LR\n A-->B\n' > "$RUNNER_TEMP/a.mmd"
+          env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" "$RUNNER_TEMP/bin/canvas" render "$RUNNER_TEMP/a.mmd" -o "$RUNNER_TEMP/a.svg"
+          grep -q "<svg" "$RUNNER_TEMP/a.svg"
+          env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$RUNNER_TEMP/bin/canvas" serve --port 43556 &
+          for _ in $(seq 1 20); do curl -fs http://127.0.0.1:43556/ > /dev/null && exit 0; sleep 1; done
+          echo "binary did not serve the app" >&2
           exit 1

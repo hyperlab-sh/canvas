@@ -9,6 +9,7 @@ It packages a build of the [hyperlab-sh/openflowkit](https://github.com/hyperlab
 [OpenFlowKit](https://github.com/openflowkit/openflowkit)): the canvas editor, a local service that keeps the files
 and serves the editor, and an MCP server agents draw through.
 
+- [Install](#install)
 - [Quick start](#quick-start)
 - [Run it in the background](#run-it-in-the-background)
 - [Projects and configuration](#projects-and-configuration)
@@ -16,25 +17,40 @@ and serves the editor, and an MCP server agents draw through.
 - [Command reference](#command-reference)
 - [Building and releasing](#building-and-releasing)
 
-Needs Node 20.11 or newer. Linux and macOS; the background service is not supported on Windows.
+## Install
+
+Pick one. The first three are a standalone binary that carries its own runtime: no Node or bun needed, and nothing
+else on your machine decides which runtime runs the service.
+
+| | Command | Platforms |
+|---|---|---|
+| Homebrew | `brew install hyperlab-sh/tap/canvas` | macOS, Linux |
+| Install script | `curl -fsSL https://raw.githubusercontent.com/hyperlab-sh/canvas/main/install.sh \| sh` | macOS, Linux (x64, arm64; not Alpine/musl) |
+| PowerShell | `irm https://raw.githubusercontent.com/hyperlab-sh/canvas/main/install.ps1 \| iex` | Windows x64 |
+| npm | `npm i -g @hyperlab.sh/canvas` | needs Node 20.11 or newer |
+| bun | `bun add -g @hyperlab.sh/canvas` | installs with bun, but **runs on Node** (see below) |
+
+The install script puts the program in `~/.local/share/canvas` and links `~/.local/bin/canvas` (override with
+`CANVAS_HOME` and `CANVAS_BIN_DIR`; pick a version with `--version 0.3.0`). Run it again to upgrade, and
+`sh install.sh --uninstall` to remove it. It checks the download against the release's `SHA256SUMS`. `brew upgrade canvas`
+upgrades the Homebrew copy.
+
+**The npm package runs on Node, whichever tool installed it.** The `canvas` command starts with `#!/usr/bin/env node`,
+and bun, like npm, runs installed commands through that line. If you installed with bun and have no Node, use one of the
+standalone options instead. To run it on bun anyway, use `bun --bun canvas serve`, and for the background service
+`canvas service install --runtime bun`.
 
 ## Quick start
 
 ```sh
-npx @hyperlab.sh/canvas serve        # or: bunx @hyperlab.sh/canvas serve
+canvas serve                         # after any install above
+npx @hyperlab.sh/canvas serve        # or without installing: bunx @hyperlab.sh/canvas serve
 ```
 
 Open http://127.0.0.1:43120. The service listens on the loopback address only and refuses requests from other hosts and
 other websites.
 
-`bunx` caches what it resolves for `latest`, so after a release it can keep running the old version. Name the version (`bunx @hyperlab.sh/canvas@0.2.0 serve`) or clear it with `bun pm cache rm`; `npx` does not do this.
-
-For daily use install it once, so that `canvas` is a command and the background service can find it:
-
-```sh
-npm i -g @hyperlab.sh/canvas         # or: bun add -g @hyperlab.sh/canvas
-canvas serve
-```
+`bunx` caches what it resolves for `latest`, so after a release it can keep running the old version. Name the version (`bunx @hyperlab.sh/canvas@0.3.0 serve`) or clear it with `bun pm cache rm`; `npx` does not do this.
 
 ## Run it in the background
 
@@ -49,8 +65,9 @@ canvas service logs -f               # follow the log
 canvas service uninstall             # stop and remove it
 ```
 
-Options for `install`: `--port <n>` (default 43120) and `--config <path>` (a service config file, see
-[below](#projects-and-configuration)). Run `install` again to change them.
+Options for `install`: `--port <n>` (default 43120), `--config <path>` (a service config file, see
+[below](#projects-and-configuration)) and, for the npm package only, `--runtime node|bun|<path>` (which runtime the
+service runs on; default the one running `canvas`). Run `install` again to change them.
 
 | | macOS | Linux |
 |---|---|---|
@@ -61,11 +78,12 @@ Options for `install`: `--port <n>` (default 43120) and `--config <path>` (a ser
 Things to know:
 
 - **Install from a lasting location.** `canvas service install` refuses to run from an `npx`/`bunx` cache or a
-  temporary directory, because the service would point into something that gets deleted. Install the package globally
-  first.
-- **The service pins the paths of Node and of the package** from the moment you run `install`. After a Node upgrade
-  that removes the old Node (version managers do this), or after moving the package, run `canvas service install`
-  again. `canvas service status` shows `not answering` when that happened.
+  temporary directory, because the service would point into something that gets deleted. Install canvas first.
+- **The service pins what it runs** from the moment you run `install`, and `install` prints it. With the standalone
+  binary that is the binary itself: the install script replaces it in place and Homebrew's stable `opt` path follows
+  `brew upgrade`, so upgrades need nothing. With the npm package it is the runtime and the package path: after a Node
+  upgrade that removes the old Node (version managers do this), or after moving the package, run
+  `canvas service install` again. `canvas service status` shows `not answering` when that happened.
 - **Linux, logged out.** A systemd user unit stops when your last session ends. To keep it running, run
   `sudo loginctl enable-linger $USER` once; `install` tells you when this applies.
 - **Something already on the port.** An agent's MCP server starts the service itself when nothing answers, and
@@ -148,9 +166,19 @@ node bin/canvas.js serve
 ```
 
 To take a newer fork: `git -C openflowkit fetch origin && git -C openflowkit checkout origin/main`, then commit the new
-pointer. Release by bumping `version` in `package.json`, committing, and pushing the tag `vX.Y.Z`: the Release workflow
-builds and publishes through npm trusted publishing (the repo and `release.yml` are registered as the trusted
-publisher on npmjs.com, so no token is stored) and attaches provenance. The very first publish was manual.
+pointer. Release by bumping `version` in `package.json`, committing, and pushing the tag `vX.Y.Z`. The Release workflow
+then:
+
+1. builds the standalone binaries for macOS, Linux and Windows (`scripts/package-native.mjs`, needs bun) and attaches
+   them, with `SHA256SUMS`, to a GitHub release;
+2. renders the Homebrew formula (`scripts/render-formula.mjs`) and pushes it to `hyperlab-sh/homebrew-tap` when the
+   `HOMEBREW_TAP_TOKEN` secret is set;
+3. publishes the npm package through npm trusted publishing (the repo and `release.yml` are registered as the trusted
+   publisher on npmjs.com, so no token is stored) with provenance.
+
+To build the binary for your own machine: `npm run build && bun scripts/package-native.mjs`, which writes the archive
+and `SHA256SUMS` to `release/`. The binary is bun plus `bin/canvas-native.js`; it starts itself as bun
+(`BUN_BE_BUN=1`) to run the CLI bundled in `share/canvas`.
 
 Inside this repo `npx @hyperlab.sh/canvas` finds the local package and fails; use `node bin/canvas.js` or run npx from
 another directory.

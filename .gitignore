@@ -9,3 +9,5 @@ Thumbs.db
 .idea/
 .vscode/
 .env*
+native-build/
+release/

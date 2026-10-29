@@ -6,6 +6,19 @@ All notable changes are listed here, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.3.0]
+
+### Added
+- Standalone binaries for macOS, Linux and Windows (bun-compiled, no Node or bun needed), attached to each GitHub release with `SHA256SUMS`.
+- `install.sh` (macOS, Linux) and `install.ps1` (Windows) install the binary and verify its checksum; a Homebrew formula is pushed to `hyperlab-sh/homebrew-tap` on release.
+- `canvas service install --runtime node|bun|<path>` pins the runtime the npm package's service runs on. The binary's service runs the binary itself, and under Homebrew points at the stable `opt` path so `brew upgrade` keeps it working.
+
+### Fixed
+- Running the CLI on bun no longer hangs layout (elkjs mistook bun's global `self` for a web worker).
+
+### Documented
+- The npm package runs on Node even when bun installed it, because the `canvas` command starts with a `node` shebang.
+
 ## [0.2.0]
 
 ### Added

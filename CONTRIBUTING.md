@@ -21,7 +21,7 @@ node bin/canvas.js serve
 
 Run `npx @hyperlab.sh/canvas` from another directory: inside this repo npx finds the local package and fails with `canvas: command not found`.
 
-`npm test` runs the unit tests for `canvas service`.
+`npm test` runs the unit tests for `canvas service`. The standalone binary needs bun: `bun scripts/package-native.mjs` builds it for your machine into `release/`.
 
 Check the package contents before opening a PR that touches `files` or the build: `npm pack --dry-run`.
 
