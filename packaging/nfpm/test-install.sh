@@ -31,7 +31,8 @@ elif command -v zypper >/dev/null 2>&1; then
   kind=rpm
   pkg="$(ls "$dir"/canvas-"$version"-1."$rpm_arch".rpm)"
   # The local package is unsigned; repo signing is the pkg-repos concern.
-  zypper --non-interactive --no-gpg-checks install "$pkg"
+  # Exit 106 means a mirror was unreachable while refreshing; the local package still installs, and the checks below prove it.
+  zypper --non-interactive --no-gpg-checks install "$pkg" || [ $? -eq 106 ]
   remove() { zypper --non-interactive remove canvas; }
 else
   fail "no apt-get, dnf or zypper"
