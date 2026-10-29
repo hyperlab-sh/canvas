@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { DEFAULT_PORT, LABEL, UNIT, ephemeralReason, launchdPlist, parseServiceArgs, runService, systemdUnit } from '../lib/service.js';
+import { DEFAULT_PORT, LABEL, UNIT, ephemeralReason, launchdPlist, parseServiceArgs, resolveRuntime, runService, stableExecutable, systemdUnit } from '../lib/service.js';
 
 const SCRIPT = '/opt/lib/node_modules/@hyperlab.sh/canvas/bin/canvas.js';
 
@@ -12,7 +12,7 @@ function harness(overrides = {}) {
   const calls = [];
   const lines = { out: [], err: [] };
   const ctx = {
-    script: SCRIPT, node: '/usr/local/bin/node', home, uid: 501, env: { USER: 'me' },
+    script: SCRIPT, runtime: '/usr/local/bin/node', home, uid: 501, env: { USER: 'me' },
     exec: (command, args) => { calls.push([command, ...args]); return { status: 0, stdout: '', stderr: '' }; },
     probe: async () => false,
     out: (text) => lines.out.push(text), err: (text) => lines.err.push(text),
@@ -23,7 +23,7 @@ function harness(overrides = {}) {
 
 describe('launchdPlist', () => {
   it('runs node, the script and serve, restarting only after a failure', () => {
-    const plist = launchdPlist({ node: '/n/node', script: SCRIPT, logFile: '/l/canvas.log' });
+    const plist = launchdPlist({ program: ['/n/node', SCRIPT], logFile: '/l/canvas.log' });
     assert.match(plist, /<string>\/n\/node<\/string>\s*<string>\/opt\/lib[^<]*canvas\.js<\/string>\s*<string>serve<\/string>\s*<\/array>/);
     assert.doesNotMatch(plist, /--port|--config/);
     assert.match(plist, /<key>SuccessfulExit<\/key>\s*<false\/>/);
@@ -31,7 +31,7 @@ describe('launchdPlist', () => {
     assert.match(plist, new RegExp(`<string>${LABEL}</string>`));
   });
   it('passes the port and config and escapes XML', () => {
-    const plist = launchdPlist({ node: '/n/node', script: '/a&b/<x>/canvas.js', port: 43999, config: '/c/svc.json', logFile: '/l' });
+    const plist = launchdPlist({ program: ['/n/node', '/a&b/<x>/canvas.js'], port: 43999, config: '/c/svc.json', logFile: '/l' });
     assert.match(plist, /<string>--port<\/string>\s*<string>43999<\/string>\s*<string>--config<\/string>\s*<string>\/c\/svc\.json<\/string>/);
     assert.match(plist, /\/a&amp;b\/&lt;x&gt;\/canvas\.js/);
   });
@@ -39,7 +39,7 @@ describe('launchdPlist', () => {
 
 describe('systemdUnit', () => {
   it('quotes every argument and escapes % and $', () => {
-    const unit = systemdUnit({ node: '/my node/node', script: '/p/100%/$HOME/canvas.js', port: 43999 });
+    const unit = systemdUnit({ program: ['/my node/node', '/p/100%/$HOME/canvas.js'], port: 43999 });
     assert.match(unit, /^ExecStart="\/my node\/node" "\/p\/100%%\/\$\$HOME\/canvas\.js" "serve" "--port" "43999"$/m);
     assert.match(unit, /^Restart=on-failure$/m);
     assert.match(unit, /^WantedBy=default\.target$/m);
@@ -221,4 +221,76 @@ describe('runService elsewhere', () => {
     assert.match(h.lines.err.join('\n'), /canvas service install/);
   });
   it('defaults to the documented port', () => assert.equal(DEFAULT_PORT, 43120));
+});
+
+describe('stableExecutable', () => {
+  it('points a Homebrew Cellar path at the opt link when it exists', () => {
+    assert.equal(stableExecutable('/opt/homebrew/Cellar/canvas/0.3.0/bin/canvas', () => true), '/opt/homebrew/opt/canvas/bin/canvas');
+    assert.equal(stableExecutable('/home/linuxbrew/.linuxbrew/Cellar/canvas/0.3.0/bin/canvas', () => true), '/home/linuxbrew/.linuxbrew/opt/canvas/bin/canvas');
+    assert.equal(stableExecutable('/opt/homebrew/Cellar/canvas/0.3.0/libexec/bin/canvas', () => true), '/opt/homebrew/opt/canvas/libexec/bin/canvas');
+  });
+  it('keeps the path when the opt link is missing or it is not a Cellar path', () => {
+    assert.equal(stableExecutable('/opt/homebrew/Cellar/canvas/0.3.0/bin/canvas', () => false), '/opt/homebrew/Cellar/canvas/0.3.0/bin/canvas');
+    assert.equal(stableExecutable('/home/me/.local/share/canvas/bin/canvas', () => true), '/home/me/.local/share/canvas/bin/canvas');
+  });
+});
+
+describe('resolveRuntime', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'canvas-rt-'));
+  mkdirSync(join(dir, 'bin'));
+  const tool = join(dir, 'bin', 'fakebun');
+  writeFileSync(tool, '#!/bin/sh\n');
+  chmodSync(tool, 0o755);
+  writeFileSync(join(dir, 'bin', 'plain'), 'x');
+  const env = { PATH: `/nowhere${process.platform === 'win32' ? ';' : ':'}${join(dir, 'bin')}` };
+  it('finds a name on PATH and accepts an executable path', () => {
+    assert.equal(resolveRuntime('fakebun', env), tool);
+    assert.equal(resolveRuntime(tool, env), tool);
+  });
+  it('rejects what is missing or not executable', () => {
+    assert.equal(resolveRuntime('nope', env), null);
+    assert.equal(resolveRuntime('plain', env), null);
+    assert.equal(resolveRuntime(join(dir, 'bin', 'plain'), env), null);
+    assert.equal(resolveRuntime(join(dir, 'missing'), env), null);
+  });
+});
+
+describe('--runtime and the standalone binary', () => {
+  it('parses --runtime for install only', () => {
+    assert.equal(parseServiceArgs(['install', '--runtime', 'bun']).runtime, 'bun');
+    assert.match(parseServiceArgs(['status', '--runtime', 'bun']).error, /belong to install/);
+    assert.match(parseServiceArgs(['install', '--runtime']).error, /needs a value/);
+  });
+  it('pins the chosen runtime ahead of the script', async () => {
+    const h = harness({ platform: 'darwin' });
+    const dir = mkdtempSync(join(tmpdir(), 'canvas-rt-'));
+    const bun = join(dir, 'bun');
+    writeFileSync(bun, '#!/bin/sh\n');
+    chmodSync(bun, 0o755);
+    assert.equal(await h.run(['install', '--runtime', bun]), 0);
+    const plist = readFileSync(join(h.home, 'Library', 'LaunchAgents', `${LABEL}.plist`), 'utf8');
+    assert.match(plist, new RegExp(`<string>${bun}</string>\\s*<string>${SCRIPT.replace(/[/.]/g, '\\$&')}</string>\\s*<string>serve</string>`));
+    assert.match(h.lines.out.join('\n'), new RegExp(`Runtime: ${bun}`));
+  });
+  it('fails clearly for a runtime that is not there', async () => {
+    const h = harness({ platform: 'darwin' });
+    assert.equal(await h.run(['install', '--runtime', '/no/such/bun']), 1);
+    assert.match(h.lines.err.join('\n'), /not an executable/);
+    assert.equal(existsSync(join(h.home, 'Library', 'LaunchAgents', `${LABEL}.plist`)), false);
+  });
+  it('runs the binary alone, and refuses --runtime for it', async () => {
+    const h = harness({ platform: 'linux', script: undefined, program: ['/home/me/.local/share/canvas/bin/canvas'] });
+    assert.equal(await h.run(['install']), 0);
+    const unit = readFileSync(join(h.home, '.config', 'systemd', 'user', UNIT), 'utf8');
+    assert.match(unit, /^ExecStart="\/home\/me\/\.local\/share\/canvas\/bin\/canvas" "serve"$/m);
+    assert.match(h.lines.out.join('\n'), /Binary: .*carries its own runtime/);
+    const again = harness({ platform: 'linux', script: undefined, program: ['/x/canvas'] });
+    assert.equal(await again.run(['install', '--runtime', 'node']), 1);
+    assert.match(again.lines.err.join('\n'), /carries its own runtime/);
+  });
+  it('refuses a binary running from a temp directory', async () => {
+    const h = harness({ platform: 'linux', script: undefined, program: [join(tmpdir(), 'canvas')] });
+    assert.equal(await h.run(['install']), 1);
+    assert.match(h.lines.err.join('\n'), /temporary directory/);
+  });
 });
