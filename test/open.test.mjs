@@ -90,11 +90,23 @@ describe('appUrl', () => {
 
 describe('appInstalled', () => {
   const answer = (code, stdout = '') => { const seen = []; return { seen, run: (command, args) => { seen.push([command, ...args]); return { code, stdout }; } }; };
-  it('asks LaunchServices on macOS', () => {
-    const a = answer(0);
-    assert.equal(appInstalled('darwin', a.run), true);
-    assert.deepEqual(a.seen, [['open', '-Rb', 'sh.hyperlab.canvas']]);
-    assert.equal(appInstalled('darwin', answer(1).run), false);
+  it('asks Spotlight for the bundle id on macOS, without opening anything', () => {
+    const a = answer(0, '/Applications/Canvas.app\n');
+    assert.equal(appInstalled('darwin', a.run, '/h'), true);
+    assert.deepEqual(a.seen, [['mdfind', 'kMDItemCFBundleIdentifier == "sh.hyperlab.canvas"']]);
+  });
+  it('falls back to the bundle identifier of the app folders on macOS', () => {
+    const seen = [];
+    const run = (command, args) => { seen.push([command, ...args]); return args[1]?.startsWith('/h/') ? { code: 0, stdout: 'sh.hyperlab.canvas\n' } : { code: 0, stdout: '' }; };
+    assert.equal(appInstalled('darwin', run, '/h'), true);
+    assert.deepEqual(seen.map((call) => call[0] + ' ' + (call[2] ?? '')), ['mdfind ', 'defaults /Applications/Canvas.app/Contents/Info', 'defaults /h/Applications/Canvas.app/Contents/Info']);
+    assert.equal(appInstalled('darwin', (command) => ({ code: 0, stdout: command === 'mdfind' ? '' : 'com.other.app\n' }), '/h'), false);
+    assert.equal(appInstalled('darwin', answer(1).run, '/h'), false);
+  });
+  it('never uses open -R on macOS', () => {
+    const seen = [];
+    appInstalled('darwin', (command, args) => { seen.push(command); return { code: 1, stdout: '' }; }, '/h');
+    assert.ok(!seen.includes('open'));
   });
   it('wants a non-empty handler from xdg-mime on Linux', () => {
     const a = answer(0, 'canvas-app.desktop\n');

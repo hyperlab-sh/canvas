@@ -147,7 +147,7 @@ also a Claude Code plugin (`.claude-plugin/plugin.json`).
 | Command | What it does |
 |---|---|
 | `canvas serve [--port N] [--config path] [--app dir]` | Run the service and the editor in the foreground. |
-| `canvas open [diagram] [--app\|--browser] [--print]` | Open a diagram in the desktop app when it is installed, in your browser otherwise, starting the service if needed. `--app` insists on the app (an error when it is missing, and it needs a diagram); the app is found by its bundle id `sh.hyperlab.canvas` on macOS; with no diagram, or when the app fails to start, the browser is used, `--browser` insists on the browser. `diagram` is a `.openflow.json` file in a project folder, `project/id`, or a diagram id or title; with none the home page opens. `--print` writes the http link instead. |
+| `canvas open [diagram] [--app\|--browser] [--print]` | Open a diagram in the desktop app when it is installed, in your browser otherwise, starting the service if needed. The app is detected without launching it (Spotlight by bundle id `sh.hyperlab.canvas` on macOS, the `canvas://` handler elsewhere). `--app` requires the app and a diagram, and exits 1 if the app is missing or cannot start; only an auto-detected app falls back to the browser when it fails to start. `--browser` insists on the browser. `diagram` is a `.openflow.json` file in a project folder, `project/id`, or a diagram id or title; with none the home page opens in the browser. `--print` writes the http link instead. |
 | `canvas service <install\|status\|restart\|logs\|uninstall>` | Run it in the background. |
 | `canvas mcp` | The MCP server on stdio, for agents. |
 | `canvas render <file> -o out.svg` | Mermaid, D2, Structurizr or OpenFlow DSL to SVG. |
