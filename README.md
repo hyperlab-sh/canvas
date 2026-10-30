@@ -22,7 +22,7 @@ and serves the editor, and an MCP server agents draw through.
 
 Two things ship: **`canvas`**, the CLI and background service (with the MCP server), and **`canvas-app`**, a desktop
 window onto that service ([below](#desktop-app)). The app does not contain the service: install `canvas` too, except
-with Homebrew, Scoop and the `.deb`/`.rpm`, which pull it in. Every channel below is built by the release workflow and
+with Homebrew, Scoop, winget and the `.deb`/`.rpm`, which pull it in. Every channel below is built by the release workflow and
 installs the same version.
 
 The standalone channels (Homebrew, the apt/dnf repositories, `.deb`/`.rpm`, install scripts, Scoop, winget, Nix,
@@ -86,7 +86,8 @@ sudo dnf install ./canvas-<v>-1.x86_64.rpm ./canvas-app-<v>-linux-x64.rpm     # 
 
 **AppImage** (the app only, x86_64 and arm64): download `canvas-app-<v>-linux-x64.AppImage` (or `-linux-arm64`),
 `chmod +x` it and run it. It has no dependencies and installs no service, so get `canvas` from another channel. It
-registers no `canvas://` handler or file association; use the `.deb` or `.rpm` for those.
+registers no file association (use the `.deb` or `.rpm` for that); it registers the `canvas://` handler itself the first
+time it runs.
 
 **Homebrew on Linux** installs the CLI and service: `brew install hyperlab-sh/tap/canvas`.
 
@@ -304,7 +305,17 @@ then:
    `microsoft/winget-pkgs` is opened by hand from it: submit `Hyperlab.Canvas` first and `Hyperlab.CanvasApp` once that is merged, because the app
    manifest depends on the CLI package and the winget-pkgs checks reject it otherwise;
 4. publishes the npm package through npm trusted publishing (the repo and `release.yml` are registered as the trusted
-   publisher on npmjs.com, so no token is stored) with provenance.
+   publisher on npmjs.com, so no token is stored) with provenance;
+5. builds the desktop app bundles (`.dmg`, `.msi`, `-setup.exe`, `.AppImage`, `.deb`, `.rpm`) and the `canvas` `.deb` and
+   `.rpm` packages, installs them in clean distro containers, and attaches them to the release with their `SHA256SUMS`
+   entries;
+6. adds the packages to the signed apt and rpm repositories on the `gh-pages` branch (signed with the
+   `REPO_GPG_PRIVATE_KEY` secret);
+7. pushes the Docker image to `ghcr.io/hyperlab-sh/canvas` (`:<version>` and `:latest`, amd64 and arm64);
+8. commits the new `nix/release.json` (the version and hashes the flake reads) to `main`.
+
+Running the workflow by hand (`workflow_dispatch`) with `dry_run` on (the default) builds and verifies all of this and
+publishes nothing.
 
 To build the binary for your own machine: `npm run build && bun scripts/package-native.mjs`, which writes the archive
 and `SHA256SUMS` to `release/`. The binary is bun plus `bin/canvas-native.js`; it starts itself as bun
