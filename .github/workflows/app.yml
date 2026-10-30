@@ -81,13 +81,17 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           mkdir cli
           if [ "$RUNNER_OS" = Windows ]; then
-            tar -xf "release/canvas-$version-$target.zip" -C cli
+            # bsdtar expands zip files; the tar on PATH in Git Bash is GNU tar, which does not.
+            "$SYSTEMROOT/System32/tar.exe" -xf "release/canvas-$version-$target.zip" -C cli
             canvas="$PWD/cli/bin/canvas.exe"
             app="$PWD/desktop/src-tauri/target/release/canvas-app.exe"
           else
             tar -xzf "release/canvas-$version-$target.tar.gz" -C cli
             canvas="$PWD/cli/bin/canvas"
-            app="$PWD/desktop/src-tauri/target/release/bundle/macos/Canvas.app/Contents/MacOS/canvas-app"
+            # The .dmg is the product: smoke the app inside it.
+            dmg="$(ls app-bundles/canvas-app-*-$target.dmg)"
+            hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/dmg" "$dmg"
+            app="$RUNNER_TEMP/dmg/Canvas.app/Contents/MacOS/canvas-app"
           fi
           "$canvas" --version
           "$app" --version
