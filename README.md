@@ -25,7 +25,7 @@ else on your machine decides which runtime runs the service.
 | | Command | Platforms |
 |---|---|---|
 | Homebrew | `brew install hyperlab-sh/tap/canvas` | macOS, Linux |
-| Homebrew cask (desktop app) | `brew install --cask hyperlab-sh/tap/canvas-app` | macOS |
+| Homebrew cask (desktop app) | `brew install --cask hyperlab-sh/tap/canvas-app` | macOS (unsigned: if macOS refuses to open `Canvas.app`, right-click > Open, or run `xattr -dr com.apple.quarantine /Applications/Canvas.app`) |
 | Install script | `curl -fsSL https://raw.githubusercontent.com/hyperlab-sh/canvas/main/install.sh \| sh` | macOS, Linux (x64, arm64; not Alpine/musl) |
 | PowerShell | `irm https://raw.githubusercontent.com/hyperlab-sh/canvas/main/install.ps1 \| iex` | Windows x64 |
 | npm | `npm i -g @hyperlab.sh/canvas` | needs Node 20.11 or newer |

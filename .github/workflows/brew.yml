@@ -25,7 +25,8 @@ jobs:
         with:
           node-version: 22
 
-      # The "app" artifact's SHA256SUMS lists the archives too.
+      # Deliberately the "app" artifact too, though only for its SHA256SUMS (which lists the archives as well): the formula is
+      # rendered against the exact SHA256SUMS the release ships, so this job waits for the app workflow.
       - uses: actions/download-artifact@v4
         with:
           name: release
@@ -93,13 +94,15 @@ jobs:
           tap="$(brew --repository hyperlab-sh/tap)"
           mkdir -p "$tap/Casks"
           node scripts/render-cask.mjs "$(node scripts/app-assets.mjs version)" assets > "$tap/Casks/canvas-app.rb"
-          # Current Homebrew's style rules reject `postflight` (A5 needs it: there is no quarantine step in postflight_steps)
-          # and ask for `depends_on :macos`, which older Homebrew does not know. Reported, not gating; audit gates.
+          # Current Homebrew's style rules reject `postflight` (A5 needs it: there is no quarantine step in postflight_steps).
+          # Reported, not gating; audit gates.
           brew style --cask hyperlab-sh/tap/canvas-app || echo "::warning::brew style findings on the cask (see the log)"
           brew trust hyperlab-sh/tap 2> /dev/null || true
           brew audit --cask hyperlab-sh/tap/canvas-app
 
-      # Homebrew quarantines cask downloads by default (a user install does the same), so the postflight has something to remove.
+      # Homebrew quarantines cask downloads by default (a user install does the same). The postflight is proven to matter:
+      # the cached dmg carries the quarantine, a copy of the cask without the postflight leaves the app quarantined, and
+      # only the real cask leaves it clean.
       - name: Install the cask, check the quarantine, smoke the app
         run: |
           unset HOMEBREW_CASK_OPTS
@@ -107,23 +110,40 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           app_version="$(node scripts/app-assets.mjs version)"
           python3 -m http.server 8000 --bind 127.0.0.1 --directory assets > "$RUNNER_TEMP/server.log" 2>&1 &
-          trap 'kill $!' EXIT
+          server=$!
+          trap 'kill $server $serve 2> /dev/null || true' EXIT
           curl -fsS --retry 30 --retry-connrefused --retry-delay 1 -o /dev/null http://127.0.0.1:8000/SHA256SUMS
           tap="$(brew --repository hyperlab-sh/tap)"
           mkdir -p "$tap/Formula"
           node scripts/render-formula.mjs "$version" assets --base http://127.0.0.1:8000 > "$tap/Formula/canvas.rb"
-          node scripts/render-cask.mjs "$app_version" assets --base http://127.0.0.1:8000 > "$tap/Casks/canvas-app.rb"
-          brew install --cask hyperlab-sh/tap/canvas-app
+          node scripts/render-cask.mjs "$app_version" assets --base http://127.0.0.1:8000 > "$RUNNER_TEMP/canvas-app.rb"
+          app=/Applications/Canvas.app
+
+          # Without the postflight: the app must come out quarantined, or the check below proves nothing.
+          awk '/^  postflight do$/ { skip = 1 } !skip { print } skip && /^  end$/ { skip = 0 }' "$RUNNER_TEMP/canvas-app.rb" > "$tap/Casks/canvas-app.rb"
+          if grep -q postflight "$tap/Casks/canvas-app.rb"; then echo "the postflight was not removed from the control cask" >&2; exit 1; fi
+          brew install --cask hyperlab-sh/tap/canvas-app 2>&1 | tee "$RUNNER_TEMP/install-control.log"
+          dmg="$(brew --cache --cask hyperlab-sh/tap/canvas-app)"
+          xattr -p com.apple.quarantine "$dmg" || { echo "Homebrew did not quarantine the downloaded dmg: $dmg" >&2; exit 1; }
+          xattr -r "$app" | grep -q com.apple.quarantine || { echo "the app is not quarantined without the postflight, so the check proves nothing" >&2; exit 1; }
+          brew uninstall --cask hyperlab-sh/tap/canvas-app
+          test ! -e "$app"
+
+          # The real cask.
+          cp "$RUNNER_TEMP/canvas-app.rb" "$tap/Casks/canvas-app.rb"
+          brew install --cask hyperlab-sh/tap/canvas-app 2>&1 | tee "$RUNNER_TEMP/install.log"
+          if grep -q "postflight.*deprecated" "$RUNNER_TEMP/install.log"; then
+            echo "::warning::Homebrew deprecates the cask postflight; A5 relies on it (no xattr step in postflight_steps). Users can run: xattr -dr com.apple.quarantine /Applications/Canvas.app"
+          fi
           brew list --formula canvas
 
-          app=/Applications/Canvas.app
           test -d "$app"
           xattr -r "$app" || true
           if xattr -r "$app" | grep -q com.apple.quarantine; then echo "$app is still quarantined" >&2; exit 1; fi
 
           export OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json"
           "$(brew --prefix)/bin/canvas" serve --port 43120 &
-          trap 'kill $!' EXIT
+          serve=$!
           curl -fsS --retry 30 --retry-connrefused --retry-delay 1 -o /dev/null http://127.0.0.1:43120/health
           "$app/Contents/MacOS/canvas-app" --version
           "$app/Contents/MacOS/canvas-app" --smoke | tee "$RUNNER_TEMP/smoke.json"

@@ -30,6 +30,10 @@ test('the cask depends on the canvas formula and installs Canvas.app', () => {
   assert.match(cask, /^  app "Canvas\.app"$/m);
 });
 
+test('the cask is macOS-only', () => {
+  assert.match(renderCask('0.4.0', sums), /^  depends_on :macos$/m);
+});
+
 test('the postflight removes com.apple.quarantine from the installed app (A5)', () => {
   const cask = renderCask('0.4.0', sums);
   assert.match(cask, /postflight do\n\s+system_command "\/usr\/bin\/xattr",\n\s+args: \["-dr", "com\.apple\.quarantine", "#\{appdir\}\/Canvas\.app"\]\n\s+end/);
