@@ -2,7 +2,7 @@
 //   node scripts/app-assets.mjs collect <bundle dir> <os-cpu> <out dir>   copy the target's bundles to canvas-app-<v>-<os>-<cpu>.<ext>
 //   node scripts/app-assets.mjs version                                   print the app version
 //   node scripts/app-assets.mjs expected [version]                        print the full asset list, one name per line
-//   node scripts/app-assets.mjs check <dir> [version]                     fail unless <dir> holds exactly that list
+//   node scripts/app-assets.mjs check <dir>                              fail unless <dir> holds exactly that list
 //   node scripts/app-assets.mjs sums <dir> <SHA256SUMS>                   append the app assets in <dir> to SHA256SUMS
 //   node scripts/app-assets.mjs config                                    print the Tauri config override with the canvas dependency
 // The app version is the one in desktop/src-tauri/Cargo.toml; the dependency is on the CLI version in package.json.
@@ -13,7 +13,10 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** What each target ships, in the spelling of the CLI archives (`darwin`, `linux`, `windows`; `x64`, `arm64`). */
+/**
+ * What each target ships, in the spelling of the CLI archives (`darwin`, `linux`, `windows`; `x64`, `arm64`).
+ * Keep in step with `bundles` in the matrix of .github/workflows/app.yml, which names the same bundles for Tauri.
+ */
 export const TARGETS = {
   'darwin-arm64': ['dmg'],
   'darwin-x64': ['dmg'],
@@ -107,7 +110,7 @@ function main([command, ...args]) {
       console.log(expectedAssets(args[0] ?? appVersion()).join('\n'));
       return;
     case 'check': {
-      const { missing, unexpected } = diffAssets(readdirSync(resolve(args[0])), args[1] ?? appVersion());
+      const { missing, unexpected } = diffAssets(readdirSync(resolve(args[0])), appVersion());
       if (missing.length || unexpected.length) throw new Error(`app assets differ: missing [${missing}] unexpected [${unexpected}]`);
       console.log('app assets complete');
       return;

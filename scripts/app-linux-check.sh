@@ -61,6 +61,15 @@ echo "$smoke" | tee "${SMOKE_OUT:-$work}/smoke-linux-$cpu.json"
 echo "::endgroup::"
 echo "$smoke" | jq -e '.ok == true and .mounted == true' >/dev/null || fail "the editor did not mount"
 
+# The AppImage is its own bundle: it must start and mount the editor too (extract-and-run, as the runner has no FUSE).
+appimage="$assets/canvas-app-$app_version-linux-$cpu.AppImage"
+chmod +x "$appimage"
+echo "::group::AppImage --smoke"
+appimage_smoke="$(APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --smoke)" || { echo "$appimage_smoke"; fail "the AppImage smoke failed"; }
+echo "$appimage_smoke" | tee "${SMOKE_OUT:-$work}/smoke-linux-$cpu-appimage.json"
+echo "::endgroup::"
+echo "$appimage_smoke" | jq -e '.ok == true and .mounted == true' >/dev/null || fail "the AppImage did not mount the editor"
+
 $files || { echo "ok"; exit 0; }
 
 eval "$(dbus-launch --sh-syntax)"
@@ -93,6 +102,15 @@ chmod +x "$work/shim/canvas-app"
 
 # The titles of the diagrams the service holds in the scratch project (files outside every project are imported there).
 scratch_titles() { curl -fsS http://127.0.0.1:43120/projects | jq -r '.[] | select(.name == "scratch") | .diagrams[].title'; }
+scratch_id() { curl -fsS http://127.0.0.1:43120/projects | jq -r --arg t "$1" '.[] | select(.name == "scratch") | .diagrams[] | select(.title == $t) | .id'; }
+# The window was pointed at the diagram: the app logs the route it shows (cold start and warm navigation alike).
+wait_for_window_on() {
+  id="$(scratch_id "$1")"
+  [ -n "$id" ] || fail "scratch has no diagram \"$1\""
+  for _ in $(seq 1 60); do grep -qxF "canvas-app: showing http://127.0.0.1:43120/#/p/scratch/$id" "$work/app.log" && return 0; sleep 1; done
+  echo "--- app.log"; cat "$work/app.log"
+  fail "the window never showed scratch/$id (\"$1\")"
+}
 wait_for_title() {
   for _ in $(seq 1 60); do scratch_titles | grep -qxF "$1" && return 0; sleep 1; done
   echo "scratch holds:"; scratch_titles || true; echo "--- app.log"; cat "$work/app.log" || true
@@ -102,6 +120,7 @@ wait_for_title() {
 echo "::group::xdg-open"
 PATH="$work/shim:$PATH" timeout 30 xdg-open "$sample"
 wait_for_title "d14 xdg-open"
+wait_for_window_on "d14 xdg-open"
 cat "$work/app.log"
 grep -q "open.openflow.json" "$work/app.log" || fail "xdg-open did not hand the file to the app"
 pgrep -x canvas-app >/dev/null || fail "the app is not running"
@@ -128,7 +147,9 @@ for step in 1 2 3 4 5 6 7 8; do
 done
 xdotool sleep 0.3 mouseup 1
 wait "$source_pid" || { cat "$work/source.log"; fail "the drag source failed"; }
+grep -q drag-end "$work/source.log" || { cat "$work/source.log"; fail "the drag ended without a drop"; }
 wait_for_title "d14 xdnd drop"
+wait_for_window_on "d14 xdnd drop"
 echo "::endgroup::"
 
 ! grep -q "cannot open" "$work/app.log" || { cat "$work/app.log"; fail "the app could not open a file"; }
