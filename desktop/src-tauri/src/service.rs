@@ -48,9 +48,44 @@ pub fn find_on_path(name: &str, path_var: &std::ffi::OsStr, extensions: &[String
     })
 }
 
-/// `canvas` on the current PATH, if any.
+/// Directories to try after PATH. A Finder/Dock launch on macOS gets only `/usr/bin:/bin:/usr/sbin:/sbin`,
+/// so the usual install locations are listed; no shell is spawned to learn the user's real PATH.
+pub fn fallback_dirs(home: Option<&Path>, local_app_data: Option<&Path>, app_data: Option<&Path>) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = vec!["/opt/homebrew/bin".into(), "/usr/local/bin".into()];
+    if let Some(home) = home {
+        dirs.extend([".bun/bin", ".local/bin", ".npm-global/bin"].map(|dir| home.join(dir)));
+    }
+    if let Some(local) = local_app_data {
+        dirs.push(local.join("Programs"));
+    }
+    if let Some(roaming) = app_data {
+        dirs.push(roaming.join("npm"));
+    }
+    dirs
+}
+
+/// A regular file that can be run (on Unix: some execute bit set).
+pub fn is_runnable(path: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(path) else { return false };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        return metadata.permissions().mode() & 0o111 != 0;
+    }
+    #[cfg(not(unix))]
+    true
+}
+
+/// `canvas` on PATH, else in the well-known install directories.
 pub fn find_canvas() -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
+    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH").map(|path| std::env::split_paths(&path).collect()).unwrap_or_default();
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from);
+    let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+    let roaming = std::env::var_os("APPDATA").map(PathBuf::from);
+    dirs.extend(fallback_dirs(home.as_deref(), local.as_deref(), roaming.as_deref()));
     let extensions: Vec<String> = if cfg!(windows) {
         std::env::var("PATHEXT")
             .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into())
@@ -61,7 +96,7 @@ pub fn find_canvas() -> Option<PathBuf> {
     } else {
         Vec::new()
     };
-    find_on_path("canvas", &path, &extensions, |candidate| candidate.is_file())
+    find_on_path("canvas", &std::env::join_paths(dirs).ok()?, &extensions, is_runnable)
 }
 
 /// Starts `canvas serve --port <port>` detached; the service outlives the app. This is the only place
@@ -177,6 +212,36 @@ mod tests {
     fn finds_the_first_match_on_path() {
         let found = find_on_path("canvas", &path_of(&["/a", "/b", "/c"]), &[], |p| p == Path::new("/b/canvas") || p == Path::new("/c/canvas"));
         assert_eq!(found, Some(PathBuf::from("/b/canvas")));
+    }
+
+    #[test]
+    fn fallback_dirs_come_in_a_fixed_order() {
+        let dirs = fallback_dirs(Some(Path::new("/h")), Some(Path::new("C:/L")), Some(Path::new("C:/R")));
+        let expected: Vec<PathBuf> = ["/opt/homebrew/bin", "/usr/local/bin", "/h/.bun/bin", "/h/.local/bin", "/h/.npm-global/bin", "C:/L/Programs", "C:/R/npm"].map(PathBuf::from).to_vec();
+        assert_eq!(dirs, expected);
+        assert_eq!(fallback_dirs(None, None, None), vec![PathBuf::from("/opt/homebrew/bin"), PathBuf::from("/usr/local/bin")]);
+    }
+
+    #[test]
+    fn path_comes_before_the_fallbacks() {
+        let path = std::env::join_paths(["/first", "/opt/homebrew/bin"]).unwrap();
+        let found = find_on_path("canvas", &path, &[], |p| p == Path::new("/first/canvas") || p == Path::new("/opt/homebrew/bin/canvas"));
+        assert_eq!(found, Some(PathBuf::from("/first/canvas")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn only_executable_regular_files_count() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("canvas");
+        std::fs::write(&file, b"#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(!is_runnable(&file));
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(is_runnable(&file));
+        assert!(!is_runnable(dir.path()));
+        assert!(!is_runnable(&dir.path().join("missing")));
     }
 
     #[test]

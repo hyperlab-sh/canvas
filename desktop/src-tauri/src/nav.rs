@@ -7,13 +7,24 @@
 
 use tauri::Url;
 
+/// The bundled page's URL: `tauri://localhost/` (macOS, Linux) or `http://tauri.localhost/` (Windows).
+pub fn bundled_url() -> Url {
+    Url::parse(if cfg!(windows) { "http://tauri.localhost/" } else { "tauri://localhost/" }).expect("static URL")
+}
+
+/// Whether `url` is the bundled page (any platform's form).
+pub fn is_bundled(url: &Url) -> bool {
+    match url.scheme() {
+        "tauri" => url.host_str() == Some("localhost"),
+        "http" | "https" => url.host_str() == Some("tauri.localhost"),
+        _ => false,
+    }
+}
+
 /// Whether the window may navigate to `url` when the service listens on `port`.
 pub fn allowed(url: &Url, port: u16) -> bool {
     match url.scheme() {
-        // The bundled page: `tauri://localhost` (macOS, Linux) or `http(s)://tauri.localhost` (Windows).
-        "tauri" => url.host_str() == Some("localhost"),
-        "http" if url.host_str() == Some("tauri.localhost") => true,
-        "https" if url.host_str() == Some("tauri.localhost") => true,
+        _ if is_bundled(url) => true,
         "http" => {
             url.host_str() == Some("127.0.0.1")
                 && url.port_or_known_default() == Some(port)
@@ -50,6 +61,17 @@ mod tests {
         assert!(ok("http://tauri.localhost/", 43120));
         assert!(ok("https://tauri.localhost/index.html", 43120));
         assert!(ok("about:blank", 43120));
+    }
+
+    #[test]
+    fn is_bundled_matches_only_the_bundled_forms() {
+        for yes in ["tauri://localhost/", "http://tauri.localhost/x", "https://tauri.localhost/"] {
+            assert!(is_bundled(&Url::parse(yes).unwrap()), "{yes}");
+        }
+        for no in ["http://127.0.0.1:43120/", "tauri://evil/", "http://localhost/", "file:///x"] {
+            assert!(!is_bundled(&Url::parse(no).unwrap()), "{no}");
+        }
+        assert!(allowed(&bundled_url(), 43120));
     }
 
     #[test]

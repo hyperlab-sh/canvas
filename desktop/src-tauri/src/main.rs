@@ -6,6 +6,7 @@ mod console;
 mod deeplink;
 mod download;
 mod nav;
+mod route;
 mod service;
 mod smoke;
 
@@ -47,43 +48,68 @@ fn navigate(app: &AppHandle, url: &str) -> Result<(), String> {
     main_window(app).ok_or("the window is gone")?.navigate(url).map_err(|error| error.to_string())
 }
 
-/// Shows `link` (a `canvas://open/<project>/<id>` URL) in the window, or holds it until the service answers.
+/// Shows `link` (a `canvas://open/<project>/<id>` URL) in the window. When the service is not answering the
+/// link is held and the bundled page is shown, which polls and hands over once the service is up.
+/// The probe blocks, so it runs off the main thread; navigation goes back through it.
 fn handle_deep_link(app: &AppHandle, link: &str) {
     let Some(target) = deeplink::parse(link) else {
         eprintln!("canvas-app: ignoring link {link:?}");
         return;
     };
-    let state = app.state::<AppState>();
-    let url = deeplink::editor_url(&origin(&state), &target);
-    if service::probe(state.port) {
-        if let Err(error) = navigate(app, &url) {
-            eprintln!("canvas-app: cannot open {url}: {error}");
-        }
-    } else {
-        *state.pending.lock().unwrap() = Some(url);
-    }
-    focus(app);
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let state = app.state::<AppState>();
+        let url = deeplink::editor_url(&origin(&state), &target);
+        let port = state.port;
+        let action = route::after_link(service::probe(port), url);
+        let on_main = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            match action {
+                route::LinkAction::Navigate(url) => {
+                    if let Err(error) = navigate(&on_main, &url) {
+                        eprintln!("canvas-app: cannot open {url}: {error}");
+                    }
+                }
+                route::LinkAction::HoldAndShowBundled(url) => {
+                    *on_main.state::<AppState>().pending.lock().unwrap() = Some(url);
+                    let on_bundled = main_window(&on_main).and_then(|window| window.url().ok()).is_some_and(|current| nav::is_bundled(&current));
+                    if !on_bundled {
+                        if let Err(error) = navigate(&on_main, nav::bundled_url().as_str()) {
+                            eprintln!("canvas-app: cannot show the service page: {error}");
+                        }
+                    }
+                }
+            }
+            focus(&on_main);
+        });
+    });
 }
 
 #[tauri::command]
 async fn probe(state: State<'_, AppState>) -> Result<serde_json::Value, ()> {
-    Ok(serde_json::json!({
-        "up": service::probe(state.port),
-        "canStart": service::find_canvas().is_some(),
-        "port": state.port,
-    }))
+    let port = state.port;
+    // Both calls block (a connect and a read timeout, a stat per PATH entry): keep them off the async workers.
+    tauri::async_runtime::spawn_blocking(move || {
+        serde_json::json!({ "up": service::probe(port), "canStart": service::find_canvas().is_some(), "port": port })
+    })
+    .await
+    .map_err(|_| ())
 }
 
 #[tauri::command]
 async fn start_service(state: State<'_, AppState>) -> Result<(), String> {
-    service::start(state.port)
+    let port = state.port;
+    tauri::async_runtime::spawn_blocking(move || service::start(port)).await.map_err(|error| error.to_string())?
 }
 
-/// Leaves the bundled page for the editor (or the diagram a deep link asked for).
+/// Leaves the bundled page for the editor (or the diagram a deep link asked for). The held link is
+/// released only once the navigation worked, so a failed attempt does not turn into the home page.
 #[tauri::command]
 async fn open_service(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    let url = state.pending.lock().unwrap().take().unwrap_or_else(|| origin(&state));
-    navigate(&app, &url)
+    let url = route::open_url(state.pending.lock().unwrap().as_deref(), &origin(&state));
+    navigate(&app, &url)?;
+    *state.pending.lock().unwrap() = None;
+    Ok(())
 }
 
 #[tauri::command]
@@ -138,22 +164,30 @@ fn run(smoke_mode: bool) {
                 });
             }
 
-            let start = if smoke_mode {
-                WebviewUrl::External(Url::parse(&format!("{origin}/#/")).unwrap())
-            } else if service_up {
-                let url = cold_link.as_ref().map_or_else(|| format!("{origin}/"), |target| deeplink::editor_url(&origin, target));
-                WebviewUrl::External(Url::parse(&url).unwrap())
-            } else {
-                if let Some(target) = &cold_link {
-                    *app.state::<AppState>().pending.lock().unwrap() = Some(deeplink::editor_url(&origin, target));
-                }
-                WebviewUrl::App("index.html".into())
+            let (first, held) = route::start_target(smoke_mode, service_up, cold_link.as_ref(), &origin);
+            *app.state::<AppState>().pending.lock().unwrap() = held;
+            let start = match first {
+                route::Start::Bundled => WebviewUrl::App("index.html".into()),
+                route::Start::External(url) => WebviewUrl::External(Url::parse(&url).expect("an origin plus a route")),
             };
 
             if smoke_mode && !service_up {
                 // Nothing to load: report without opening a window onto a dead port.
                 println!("{}", smoke::result_line(false, &[format!("no canvas service answering on {origin}")], &format!("{origin}/#/")));
                 std::process::exit(1);
+            }
+
+            if smoke_mode {
+                // The smoke report is the only IPC the service page may use, and only on the service origin.
+                app.add_capability(
+                    serde_json::json!({
+                        "identifier": "smoke",
+                        "windows": [WINDOW],
+                        "remote": { "urls": [format!("{origin}/*")] },
+                        "permissions": ["allow-smoke-report"]
+                    })
+                    .to_string(),
+                )?;
             }
 
             let downloads = download::downloads_path(app.path().download_dir().ok());
@@ -209,7 +243,7 @@ fn run(smoke_mode: bool) {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let flag = |name: &str| args.iter().any(|arg| arg == name);
-    if flag("--version") || flag("-V") {
+    if flag("--version") {
         console::attach();
         println!("canvas-app {}", env!("CARGO_PKG_VERSION"));
         return;
