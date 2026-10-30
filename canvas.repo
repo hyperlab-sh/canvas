@@ -1,0 +1,7 @@
+[canvas]
+name=Canvas
+baseurl=https://hyperlab-sh.github.io/canvas/rpm/$basearch
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://hyperlab-sh.github.io/canvas/canvas.asc

@@ -1,0 +1,68 @@
+Package: canvas-app
+Architecture: amd64
+Version: 0.4.0
+Priority: optional
+Maintainer: hyperlab
+Installed-Size: 7647
+Depends: canvas (>= 0.4.0), libwebkit2gtk-4.1-0, libgtk-3-0
+Filename: pool/main/c/canvas-app/canvas-app_0.4.0_amd64.deb
+Size: 3116168
+MD5sum: 6bb53952239bac70b4e511f664ed8a8b
+SHA1: 288bc0f314079d1285a10a11960f1f21752ddc36
+SHA256: 48fe5fe4e9873a45faad9339c3821079fae3d92cafda075b69ee87ad1e6aff2b
+SHA512: 9bf30071d472de24b808e0e802d94ba1e048c0993be2e1bdcc10167d4683b9cf37e38d24e3d2dc5da08cd5754b7481cd1d6044be1220e3806712d7ca15a5453e
+Description: Native window for the Canvas diagram editor
+ (none)
+
+Package: canvas-app
+Architecture: amd64
+Version: 0.4.1
+Priority: optional
+Maintainer: hyperlab
+Installed-Size: 7703
+Depends: canvas (>= 0.4.1), libwebkit2gtk-4.1-0, libgtk-3-0
+Filename: pool/main/c/canvas-app/canvas-app_0.4.1_amd64.deb
+Size: 3143764
+MD5sum: 8f64f2c1e78e971a4bdb8f55e760f5a1
+SHA1: 3cebc61c930cbbbfbf0bbb99e46aa52fe759927a
+SHA256: 2f8c51bfdbb876e5eba23095cb0677679550bd084f0c9273afa929b7c5683295
+SHA512: 9c43d97a08efc9623ebd53db82bd7d67f510400aa3a7eda0cee9f4dfffe0725a25cf1b98c68786e80f4705a76f141720025e84751f9e9a37299b86db2f093b57
+Description: Native window for the Canvas diagram editor
+ (none)
+
+Package: canvas
+Architecture: amd64
+Version: 0.4.0
+Priority: optional
+Section: devel
+Maintainer: hyperlab-sh <https://github.com/hyperlab-sh>
+Installed-Size: 109778
+Filename: pool/main/c/canvas/canvas_0.4.0_amd64.deb
+Size: 45976042
+MD5sum: 8b8a8604e407b3b19f052af6818e972d
+SHA1: c4b07f93d62126d53c567b8f2ed977ef4537b5f4
+SHA256: c52d3a656dede50d1dfde2999b3b2c5d12bd4c034ac860c49bbb8a8c348ec01f
+SHA512: 9fdbda777cd6a34e175c98834d4e9f2c93f5659b68d1fc70a01c8da4c3cb6b185722d136eafd790b89a62250c071cd006f3e561c0d0bf37ca781f2b5cf2bdb56
+Homepage: https://github.com/hyperlab-sh/canvas
+Description: A local diagram service for coding agents.
+ Projects of diagram files, a canvas editor in the browser, an MCP server and a CLI.
+ Run `canvas service install` to keep the service running in the background.
+
+Package: canvas
+Architecture: amd64
+Version: 0.4.1
+Priority: optional
+Section: devel
+Maintainer: hyperlab-sh <https://github.com/hyperlab-sh>
+Installed-Size: 109780
+Filename: pool/main/c/canvas/canvas_0.4.1_amd64.deb
+Size: 45976982
+MD5sum: 49e424e76df9e9a2daaafbd655e98e93
+SHA1: 4de6e386202988d8da885064c74b7ca1a0be33c5
+SHA256: 965e253002b8beca095776cd1f3a2664d1d4b2a588dbac8d1d378b2a117affe8
+SHA512: f3c749ee1b053d24a6215d9e410ac6643930b1831f999d6150ef51b85b536b6913bc1604acb95c5b0175ba4a226534a6c2665e64b989c8aeb660c70aa196c403
+Homepage: https://github.com/hyperlab-sh/canvas
+Description: A local diagram service for coding agents.
+ Projects of diagram files, a canvas editor in the browser, an MCP server and a CLI.
+ Run `canvas service install` to keep the service running in the background.
+

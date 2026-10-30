@@ -1,0 +1,31 @@
+Architectures: amd64 arm64
+Codename: stable
+Components: main
+Date: Fri, 30 Oct 2026 20:32:29 +0000
+Label: Canvas
+Origin: Canvas
+Suite: stable
+MD5Sum:
+ 8f58685d14fb2fac81f42f0a499677a0              142 Release
+ 9de815ce03df0562f8110851df2463fa             2822 main/binary-amd64/Packages
+ a4c21b1d3efc0b9fbc93b253ae08a365             1197 main/binary-amd64/Packages.gz
+ 81d57a6ecb74e829ea8533823b4cd0ca             2822 main/binary-arm64/Packages
+ 5017e9ed0a3519aad8b579f340d08736             1190 main/binary-arm64/Packages.gz
+SHA1:
+ 034b53351743d87c421c9e8746f94854b016f1d4              142 Release
+ 72b045e7621c225725fbbe5b7cdc02888ced14d2             2822 main/binary-amd64/Packages
+ 6f7d1bfef6028fae589e327bfc537472ce912445             1197 main/binary-amd64/Packages.gz
+ fa0ad7bbc4a6070a8d688f2b63bbf4e82dfa3c82             2822 main/binary-arm64/Packages
+ 9fbe04d80d7136d827fd15d3441945f287695406             1190 main/binary-arm64/Packages.gz
+SHA256:
+ d63e50bf2f044bb92c48852128618256887a3ebf2a9c49a72982c87d978b60b3              142 Release
+ dfe7b36754397420e7ade011ac4ebb2d30fb950c95caf74d65d78c32079c67b0             2822 main/binary-amd64/Packages
+ a11a0907dc59be2ad56bf3be34022ce45e96784d533a206aa2afdd26fb9fd2a2             1197 main/binary-amd64/Packages.gz
+ a438b043d1bdb995329dc36307899e0f57f56be3c589190683b5aad2ee94b672             2822 main/binary-arm64/Packages
+ e6ed9d2ad2ba1b1359806a3b7cca00ec85b32b6a8b8c59923c4505356a3fd3f4             1190 main/binary-arm64/Packages.gz
+SHA512:
+ 08a578d1ee4677846745ec6276a814236bae803e4f1b88c6b1d64b4798044d3e72a7a457db0b091bce2a526fa0452b7db6f40d5167e0e183a57f79c1cda2ba80              142 Release
+ 484f13e7e21ef34f198318fc9639311857cc048ea829a18ce50ca7c3340121ab2785cc08d05a47eb30a172a4b2aa3e6b9d3d688e92f11c96268a4c2c1f6b148b             2822 main/binary-amd64/Packages
+ 2666c4d314f2d88e82e14f03a4db3c10fb9f50d69dcc28d8dba0704b0bdebab58d1515eeea90b45bf66aaace161710049ccc74104002f1133fe154ced372d3ba             1197 main/binary-amd64/Packages.gz
+ 58786a377edad7a5a1d1cd7eb74909172ccbf7a5d8ace61942f873cd082cbcec4487e0efea823681e753c9852ec41ca1e6d692afb38b3dcd16ecb382887066ba             2822 main/binary-arm64/Packages
+ 25f2af621cdb744fce35c39c087020387e1b05261a86080682aa05c5ae7fee69450e54ca0edb411a869d1921aafd695ad98bac3d113fb498139b6196ae97c985             1190 main/binary-arm64/Packages.gz
