@@ -115,9 +115,11 @@ jobs:
           path: site
 
       # The container reaches the server on the runner through the host network, so the documented commands run unchanged
-      # with a local site URL.
+      # with a local site URL; a tree built for Pages names the Pages URL in canvas.repo, so the served copy is pointed at the
+      # local server first (the artifact stays as built).
       - name: Add the repository and install in a clean container
         run: |
+          packaging/repos/serve-local.sh site http://127.0.0.1:8080
           python3 -m http.server 8080 --bind 127.0.0.1 --directory site >"$RUNNER_TEMP/server.log" 2>&1 &
           for _ in $(seq 1 20); do curl -fs -o /dev/null http://127.0.0.1:8080/canvas.asc && break; sleep 0.5; done
           cli="$(node -p "require('./package.json').version")"

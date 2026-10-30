@@ -44,9 +44,9 @@ test('the apt source is pinned to the repository keyring', () => {
 
 test('C-7: nothing under packaging/repos or the repos workflow turns verification off', () => {
   const files = readdirSync(path('packaging/repos')).map((f) => `packaging/repos/${f}`);
-  for (const file of [...files, '.github/workflows/repos.yml']) {
+  for (const file of [...files, '.github/workflows/repos.yml', '.github/workflows/release.yml']) {
     const text = read(file).replace(/grep -rnE '[^']*'/g, '');
-    assert.doesNotMatch(text, /trusted=yes|gpgcheck=0|--no-gpg-checks|--nogpgcheck|allow-insecure/, file);
+    assert.doesNotMatch(text, /trusted=yes|gpgcheck=0|--no-gpg-checks|--nogpgcheck|allow-insecure|AllowInsecure/, file);
   }
 });
 
@@ -103,7 +103,9 @@ test('the release workflow signs and publishes only for a real tag, and the publ
 });
 
 test('the release run is pinned to the signing key of the rulings', () => {
-  assert.match(read('.github/workflows/repos.yml'), /REPO_EXPECT_FPR: .*CBE706A42B7AED6141667D695239F12AF24A7030/);
+  const pin = /REPO_EXPECT_FPR: .*CBE706A42B7AED6141667D695239F12AF24A7030/;
+  assert.match(read('.github/workflows/repos.yml'), pin);
+  assert.match(job('release.yml', 'repos-publish').text, pin);
 });
 
 const deb = (name, v, arch = 'amd64') => `apt/pool/main/${name[0]}/${name}/${name}_${v}_${arch}.deb`;
@@ -249,6 +251,44 @@ test('publish.sh pushes nothing when the tree equals the site', () => {
     assert.equal(same.status, 0, same.stderr);
     assert.match(same.stdout, /repositories unchanged/);
     assert.equal(git(remote, 'rev-parse', 'gh-pages').stdout, before);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the install job serves a tree built for Pages from the local server, and the artifact is not rewritten', () => {
+  const install = job('repos.yml', 'install').text;
+  assert.match(install, /packaging\/repos\/serve-local\.sh site http:\/\/127\.0\.0\.1:8080/);
+  assert.ok(install.indexOf('serve-local.sh') < install.indexOf('http.server'), 'rewrite before the server starts');
+  assert.doesNotMatch(job('repos.yml', 'build').text, /serve-local/);
+});
+
+const serveLocal = (site) => spawnSync('bash', [path('packaging/repos/serve-local.sh'), site, 'http://127.0.0.1:8080'], { encoding: 'utf8' });
+const repoLines = (site) => readFileSync(join(site, 'canvas.repo'), 'utf8');
+
+for (const [label, url] of [['a release tree', 'https://hyperlab-sh.github.io/canvas'], ['a dry-run tree', 'http://127.0.0.1:8080']]) {
+  test(`serve-local.sh points canvas.repo of ${label} at the local server`, () => {
+    const dir = mkdtempSync(join(tmpdir(), 'serve-test-'));
+    try {
+      writeFileSync(join(dir, 'canvas.repo'), readFileSync(path('packaging/repos/canvas.repo.in'), 'utf8').replaceAll('@BASE_URL@', url));
+      const r = serveLocal(dir);
+      assert.equal(r.status, 0, r.stderr);
+      const text = repoLines(dir);
+      assert.match(text, /^baseurl=http:\/\/127\.0\.0\.1:8080\/rpm\/\$basearch$/m);
+      assert.match(text, /^gpgkey=http:\/\/127\.0\.0\.1:8080\/canvas\.asc$/m);
+      assert.doesNotMatch(text, /github\.io/);
+      assert.match(text, /^gpgcheck=1$/m);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('serve-local.sh fails when canvas.repo names neither URL', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'serve-test-'));
+  try {
+    writeFileSync(join(dir, 'canvas.repo'), '[canvas]\nbaseurl=https://example.com/rpm/$basearch\n');
+    assert.notEqual(serveLocal(dir).status, 0);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
