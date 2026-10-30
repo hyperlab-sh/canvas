@@ -165,44 +165,55 @@ async fn start_service(state: State<'_, AppState>) -> Result<(), String> {
 /// attempt does not turn into the home page.
 #[tauri::command]
 async fn open_service(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    if !route::may_hand_over(on_bundled(&app)) {
+    // The page stops polling once this returns, so a request held while the file resolves is served by the
+    // next pass of this loop, not by a later call.
+    loop {
+        if !route::may_hand_over(on_bundled(&app)) {
+            return Ok(());
+        }
+        let held_link = state.pending.lock().unwrap().clone();
+        // Taken, so a file that arrives while this one resolves replaces it instead of being overwritten.
+        let held_file = state.pending_files.lock().unwrap().take();
+        let held_file_back = held_file.clone();
+        let (port, home) = (state.port, origin(&state));
+        // A link supersedes a held file (as in `hold_link`), so the file taken above is dropped on purpose.
+        let url = match (held_link.clone(), held_file) {
+            (Some(link), _) => route::open_url(Some(&link), &home),
+            (None, Some(file)) => {
+                let origin = home.clone();
+                let retry = file.clone();
+                let resolved = tauri::async_runtime::spawn_blocking(move || open_file::resolve(&origin, &file, &open_file::Service(port)))
+                    .await
+                    .map_err(|error| error.to_string())?;
+                // Resolving awaited. A link or drop that moved the window wins.
+                if !route::may_hand_over(on_bundled(&app)) {
+                    return Ok(());
+                }
+                // One held meanwhile (the service stopped answering) is newer: serve it instead.
+                if state.pending.lock().unwrap().is_some() || state.pending_files.lock().unwrap().is_some() {
+                    continue;
+                }
+                resolved.unwrap_or_else(|error| {
+                    eprintln!("canvas-app: cannot open {}: {error}", retry.display());
+                    home
+                })
+            }
+            (None, None) => home,
+        };
+        if let Err(error) = navigate(&app, &url) {
+            // Keep what was held for the next attempt.
+            if held_file_back.is_some() {
+                *state.pending_files.lock().unwrap() = held_file_back;
+            }
+            return Err(error);
+        }
+        // Release only what this pass served: a link held since is newer. `pending_files` was taken above.
+        let mut pending = state.pending.lock().unwrap();
+        if *pending == held_link {
+            *pending = None;
+        }
         return Ok(());
     }
-    let held_link = state.pending.lock().unwrap().clone();
-    // Taken, so a file that arrives while this one resolves replaces it instead of being overwritten.
-    let held_file = state.pending_files.lock().unwrap().take();
-    let held_file_back = held_file.clone();
-    let (port, home) = (state.port, origin(&state));
-    let url = match (held_link, held_file) {
-        (Some(link), _) => route::open_url(Some(&link), &home),
-        (None, Some(file)) => {
-            let origin = home.clone();
-            let retry = file.clone();
-            let resolved = tauri::async_runtime::spawn_blocking(move || open_file::resolve(&origin, &file, &open_file::Service(port)))
-                .await
-                .map_err(|error| error.to_string())?;
-            // Resolving awaited. A link or drop that moved the window wins; so does one that was held
-            // meanwhile (the service stopped answering), which the next hand-over serves.
-            if !route::may_hand_over(on_bundled(&app)) || state.pending.lock().unwrap().is_some() || state.pending_files.lock().unwrap().is_some() {
-                return Ok(());
-            }
-            resolved.unwrap_or_else(|error| {
-                eprintln!("canvas-app: cannot open {}: {error}", retry.display());
-                home
-            })
-        }
-        (None, None) => home,
-    };
-    if let Err(error) = navigate(&app, &url) {
-        // Keep what was held for the next attempt.
-        if held_file_back.is_some() {
-            *state.pending_files.lock().unwrap() = held_file_back;
-        }
-        return Err(error);
-    }
-    *state.pending.lock().unwrap() = None;
-    *state.pending_files.lock().unwrap() = None;
-    Ok(())
 }
 
 #[tauri::command]

@@ -13,6 +13,9 @@ use crate::{dsl, http};
 
 pub const SCRATCH: &str = "scratch";
 
+/// The only suffix the service scans for.
+const DIAGRAM_SUFFIX: &str = ".openflow.json";
+
 /// What the importer needs from the service. The real one is `Service`; the tests use a recording fake.
 pub trait Backend {
     /// `GET /projects`.
@@ -119,10 +122,11 @@ pub fn holders(folder: &Path, id: &str) -> usize {
     let Ok(entries) = std::fs::read_dir(folder) else { return 0 };
     entries
         .flatten()
-        .filter(|entry| entry.file_name().to_str().is_some_and(|name| name.ends_with(".openflow.json")))
+        .filter(|entry| entry.file_name().to_str().is_some_and(|name| name.ends_with(DIAGRAM_SUFFIX)))
         .filter_map(|entry| std::fs::read(entry.path()).ok())
         .filter_map(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
         .filter(|document| document.get("id").and_then(Value::as_str) == Some(id))
+        .take(2)
         .count()
 }
 
@@ -149,7 +153,8 @@ fn open_diagram(origin: &str, path: &Path, backend: &dyn Backend) -> Result<Stri
     let folder = path.parent().filter(|parent| !parent.as_os_str().is_empty()).unwrap_or(Path::new("."));
     let projects = backend.projects()?;
     if let Some(project) = owner(&projects, folder, real_path) {
-        if lists(&projects, &project, id) && holders(folder, id) <= 1 {
+        let scanned = path.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.ends_with(DIAGRAM_SUFFIX));
+        if scanned && lists(&projects, &project, id) && holders(folder, id) <= 1 {
             return Ok(editor_url(origin, &OpenTarget { project, id: id.to_string() }));
         }
     }
@@ -239,11 +244,13 @@ mod tests {
     }
 
     #[test]
-    fn a_file_in_a_project_opens_in_place_only_when_the_service_lists_it() {
+    fn an_upper_case_file_is_imported_even_when_a_scanned_sibling_shares_its_id() {
         let dir = tempfile::tempdir().unwrap();
-        let file = write(dir.path(), "flow.openflow.json", r#"{"id":"abc"}"#);
+        let file = write(dir.path(), "A.OpenFlow.JSON", r#"{"id":"abc"}"#);
+        write(dir.path(), "a.openflow.json", r#"{"id":"abc"}"#);
         let backend = fake_with(listed(dir.path(), "abc"));
-        assert_eq!(resolve(ORIGIN, &file, &backend).unwrap(), "http://127.0.0.1:43120/#/p/work/abc");
+        assert_eq!(resolve(ORIGIN, &file, &backend).unwrap(), format!("{ORIGIN}/#/p/{SCRATCH}/new-id"));
+        assert_eq!(*backend.calls.borrow(), ["projects", "create scratch A", "save scratch new-id"]);
     }
 
     #[test]
