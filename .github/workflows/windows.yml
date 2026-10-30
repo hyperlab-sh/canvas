@@ -1,0 +1,156 @@
+name: Windows channels
+
+# Scoop: both manifests, rendered by the scripts the release uses against the dry-run assets (a local file server stands in for
+# the release), installed from a local bucket on a clean runner. winget: both manifests rendered for the real release URLs,
+# checked with `winget validate` and uploaded as the "winget-manifests" artifact; the pull request to microsoft/winget-pkgs
+# is opened by hand. Called by ci.yml (every PR) and release.yml (before the bucket is pushed); it never publishes.
+# Needs the caller's "release" and "app" artifacts.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  scoop:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The "app" artifact too, though only for its SHA256SUMS (which lists the archives as well).
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: assets
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: assets
+
+      - name: Install Scoop
+        shell: pwsh
+        run: |
+          Invoke-Expression "& {$(Invoke-RestMethod get.scoop.sh)} -RunAsAdmin"
+          "$env:USERPROFILE\scoop\shims" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          & "$env:USERPROFILE\scoop\shims\scoop.ps1" --version
+
+      # The bucket is a git repository of the two manifests, added under the name the canvas-app manifest depends on.
+      - name: Render the manifests into a local bucket
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          app_version="$(node scripts/app-assets.mjs version)"
+          bucket="$RUNNER_TEMP/bucket"
+          mkdir -p "$bucket/bucket"
+          node scripts/render-scoop.mjs canvas "$version" assets --base http://127.0.0.1:8000 > "$bucket/bucket/canvas.json"
+          node scripts/render-scoop.mjs canvas-app "$app_version" assets --base http://127.0.0.1:8000 > "$bucket/bucket/canvas-app.json"
+          cat "$bucket/bucket/canvas.json" "$bucket/bucket/canvas-app.json"
+          git -C "$bucket" init -q
+          git -C "$bucket" add bucket
+          git -C "$bucket" -c user.name=ci -c user.email=ci@example.invalid commit -q -m manifests
+          echo "BUCKET=$(cygpath -w "$bucket")" >> "$GITHUB_ENV"
+
+      - name: scoop install canvas and canvas-app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = node -p "require('./package.json').version"
+          Start-Job { python -m http.server 8000 --bind 127.0.0.1 --directory $using:PWD\assets } | Out-Null
+          curl.exe -fsS --retry 30 --retry-connrefused --retry-delay 1 -o NUL http://127.0.0.1:8000/SHA256SUMS
+          if ($LASTEXITCODE) { throw 'the asset server did not start' }
+          scoop bucket add hyperlab $env:BUCKET
+          if ($LASTEXITCODE) { throw 'scoop bucket add failed' }
+          # canvas-app pulls canvas in as its dependency; the app is not installed before the service package.
+          scoop install hyperlab/canvas-app
+          if ($LASTEXITCODE) { throw 'scoop install failed' }
+          scoop list
+          $out = canvas --version
+          Write-Output $out
+          if ($out -ne "canvas $version") { throw "canvas --version printed '$out', expected 'canvas $version'" }
+          # The app is only started with --version: it opens no window.
+          $appVersion = node scripts/app-assets.mjs version
+          $app = "$env:USERPROFILE\scoop\apps\canvas-app\current\canvas-app.exe"
+          if (-not (Test-Path $app)) { Get-ChildItem -Recurse "$env:USERPROFILE\scoop\apps\canvas-app" | Select-Object -First 30 FullName; throw "$app was not installed" }
+          $out = & $app --version
+          Write-Output $out
+          if ($out -ne "canvas-app $appVersion") { throw "canvas-app --version printed '$out', expected 'canvas-app $appVersion'" }
+          # The service package works from the Scoop directory: it finds its app and server next to bin\.
+          "graph LR`n A-->B`n" | Set-Content -NoNewline $env:RUNNER_TEMP\a.mmd
+          canvas render $env:RUNNER_TEMP\a.mmd -o $env:RUNNER_TEMP\a.svg
+          if (-not (Select-String -Quiet '<svg' $env:RUNNER_TEMP\a.svg)) { throw 'canvas render produced no svg' }
+
+      - name: scoop uninstall removes both
+        shell: pwsh
+        run: |
+          scoop uninstall canvas-app
+          if ($LASTEXITCODE) { throw 'scoop uninstall canvas-app failed' }
+          scoop uninstall canvas
+          if ($LASTEXITCODE) { throw 'scoop uninstall canvas failed' }
+          if (Test-Path "$env:USERPROFILE\scoop\apps\canvas-app") { throw 'canvas-app is still in the Scoop apps' }
+          if (Test-Path "$env:USERPROFILE\scoop\apps\canvas") { throw 'canvas is still in the Scoop apps' }
+
+  winget:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: assets
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: assets
+
+      # The URLs are the real release ones (validate does not fetch them); the hashes are the dry run's.
+      - name: Render the manifests
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          app_version="$(node scripts/app-assets.mjs version)"
+          node scripts/render-winget.mjs canvas "$version" assets --out winget
+          node scripts/render-winget.mjs canvas-app "$app_version" assets --out winget
+          find winget -type f -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \;
+
+      - name: Get winget
+        shell: pwsh
+        run: |
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            Install-PackageProvider -Name NuGet -Force | Out-Null
+            Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery | Out-Null
+            Repair-WinGetPackageManager -AllUsers
+          }
+          winget --version
+
+      - name: winget validate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($dir in Get-ChildItem -Directory -Recurse winget\manifests | Where-Object { Get-ChildItem -File $_.FullName -Filter *.yaml }) {
+            Write-Output "validating $($dir.FullName)"
+            winget validate --manifest $dir.FullName
+            if ($LASTEXITCODE) { throw "winget validate failed for $($dir.FullName)" }
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: winget-manifests
+          path: winget/manifests
+          if-no-files-found: error

@@ -28,6 +28,7 @@ else on your machine decides which runtime runs the service.
 | Homebrew cask (desktop app) | `brew install --cask hyperlab-sh/tap/canvas-app` | macOS (unsigned: if macOS refuses to open `Canvas.app`, right-click > Open, or run `xattr -dr com.apple.quarantine /Applications/Canvas.app`) |
 | Install script | `curl -fsSL https://raw.githubusercontent.com/hyperlab-sh/canvas/main/install.sh \| sh` | macOS, Linux (x64, arm64; not Alpine/musl) |
 | PowerShell | `irm https://raw.githubusercontent.com/hyperlab-sh/canvas/main/install.ps1 \| iex` | Windows x64 |
+| Scoop | `scoop bucket add hyperlab https://github.com/hyperlab-sh/homebrew-tap` then `scoop install canvas` (or `canvas-app` for the desktop app) | Windows x64 |
 | npm | `npm i -g @hyperlab.sh/canvas` | needs Node 20.11 or newer |
 | bun | `bun add -g @hyperlab.sh/canvas` | installs with bun, but **runs on Node** (see below) |
 
@@ -174,8 +175,12 @@ then:
 1. builds the standalone binaries for macOS, Linux and Windows (`scripts/package-native.mjs`, needs bun) and attaches
    them, with `SHA256SUMS`, to a GitHub release;
 2. renders the Homebrew formula and the `canvas-app` cask (`scripts/render-formula.mjs`, `scripts/render-cask.mjs`) and pushes them to `hyperlab-sh/homebrew-tap` when the
-   `HOMEBREW_TAP_DEPLOY_KEY` secret (a write deploy key on the tap) is set;
-3. publishes the npm package through npm trusted publishing (the repo and `release.yml` are registered as the trusted
+   `HOMEBREW_TAP_DEPLOY_KEY` secret (a write deploy key on the tap) is set; the same step pushes the Scoop manifests
+   (`scripts/render-scoop.mjs`) to the tap's `bucket/` folder;
+3. renders and validates the winget manifests for `Hyperlab.Canvas` and `Hyperlab.CanvasApp` (`scripts/render-winget.mjs`,
+   `winget validate`) and uploads them as the `winget-manifests` workflow artifact; the pull request to
+   `microsoft/winget-pkgs` is opened by hand from it;
+4. publishes the npm package through npm trusted publishing (the repo and `release.yml` are registered as the trusted
    publisher on npmjs.com, so no token is stored) with provenance.
 
 To build the binary for your own machine: `npm run build && bun scripts/package-native.mjs`, which writes the archive

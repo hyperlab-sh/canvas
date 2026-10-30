@@ -69,6 +69,11 @@ jobs:
       release: ${{ startsWith(github.ref, 'refs/tags/') && !inputs.dry_run }}
     secrets: inherit
 
+  # The dry run of the Scoop bucket and the winget manifests; the winget manifests are uploaded as an artifact for manual submission.
+  windows:
+    needs: [binaries, app]
+    uses: ./.github/workflows/windows.yml
+
   # The dry run builds and checks the image; only the docker job below pushes it.
   docker-check:
     needs: binaries
@@ -309,9 +314,9 @@ jobs:
           git pull --rebase origin main
           git push origin HEAD:main
 
-  # Needs the HOMEBREW_TAP_DEPLOY_KEY secret: the private half of a write deploy key on hyperlab-sh/homebrew-tap. Without it the formula and the cask are only printed.
+  # Needs the HOMEBREW_TAP_DEPLOY_KEY secret: the private half of a write deploy key on hyperlab-sh/homebrew-tap. Without it the formula, the cask and the Scoop manifests are only printed.
   homebrew:
-    needs: [github-release, brew]
+    needs: [github-release, brew, windows]
     if: startsWith(github.ref, 'refs/tags/') && !inputs.dry_run
     runs-on: ubuntu-latest
     steps:
@@ -332,30 +337,33 @@ jobs:
         with:
           node-version: 22
 
-      - name: Render the formula and the cask
+      - name: Render the formula, the cask and the Scoop manifests
         run: |
           node scripts/render-formula.mjs "${GITHUB_REF_NAME#v}" release > canvas.rb && cat canvas.rb
           node scripts/render-cask.mjs "${GITHUB_REF_NAME#v}" release > canvas-app.rb && cat canvas-app.rb
+          node scripts/render-scoop.mjs canvas "${GITHUB_REF_NAME#v}" release > canvas.json && cat canvas.json
+          node scripts/render-scoop.mjs canvas-app "$(node scripts/app-assets.mjs version)" release > canvas-app.json && cat canvas-app.json
 
       - name: Push it to the tap
         env:
           DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
         run: |
-          if [ -z "$DEPLOY_KEY" ]; then echo "::warning::HOMEBREW_TAP_DEPLOY_KEY is not set; the formula and the cask were not pushed to hyperlab-sh/homebrew-tap"; exit 0; fi
+          if [ -z "$DEPLOY_KEY" ]; then echo "::warning::HOMEBREW_TAP_DEPLOY_KEY is not set; the formula, the cask and the Scoop manifests were not pushed to hyperlab-sh/homebrew-tap"; exit 0; fi
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/tap_key
           chmod 600 ~/.ssh/tap_key
           ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
           export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/tap_key -o IdentitiesOnly=yes"
           git clone git@github.com:hyperlab-sh/homebrew-tap.git tap
-          mkdir -p tap/Formula tap/Casks
+          mkdir -p tap/Formula tap/Casks tap/bucket
           cp canvas.rb tap/Formula/canvas.rb
           cp canvas-app.rb tap/Casks/canvas-app.rb
+          cp canvas.json canvas-app.json tap/bucket/
           cd tap
           git config user.name "canvas release"
           git config user.email "actions@users.noreply.github.com"
-          git add Formula/canvas.rb Casks/canvas-app.rb
-          git diff --cached --quiet && { echo "formula and cask unchanged"; exit 0; }
+          git add Formula/canvas.rb Casks/canvas-app.rb bucket/canvas.json bucket/canvas-app.json
+          git diff --cached --quiet && { echo "formula, cask and bucket unchanged"; exit 0; }
           git commit -m "canvas ${GITHUB_REF_NAME#v}"
           git push
 
