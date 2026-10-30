@@ -50,6 +50,11 @@ pub fn from_args(args: impl IntoIterator<Item = String>) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Like `from_args`, for a launch from another working directory: relative paths are taken from `cwd`.
+pub fn from_args_in(args: impl IntoIterator<Item = String>, cwd: &Path) -> Vec<PathBuf> {
+    from_args(args).into_iter().map(|path| if path.is_absolute() { path } else { cwd.join(path) }).collect()
+}
+
 /// The openable files among opened-file URLs (macOS hands the app `file://` URLs).
 pub fn from_urls<'a>(urls: impl IntoIterator<Item = &'a Url>) -> Vec<PathBuf> {
     urls.into_iter()
@@ -109,6 +114,12 @@ mod tests {
     fn args_keep_only_openable_files() {
         let args = ["--smoke", "canvas://open/p/i", "/x/a.mmd", "/etc/passwd", "-psn_0_1", "b.openflow.json", "http://x/a.mmd"].map(String::from);
         assert_eq!(from_args(args), vec![p("/x/a.mmd"), p("b.openflow.json")]);
+    }
+
+    #[test]
+    fn args_in_a_directory_resolve_relative_paths_against_it() {
+        let args = ["/x/a.mmd", "b.openflow.json", "sub/c.openflow", "-f", "d.txt"].map(String::from);
+        assert_eq!(from_args_in(args, Path::new("/work")), vec![p("/x/a.mmd"), p("/work/b.openflow.json"), p("/work/sub/c.openflow")]);
     }
 
     #[test]

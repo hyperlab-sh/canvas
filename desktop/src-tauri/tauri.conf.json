@@ -66,11 +66,6 @@
         "files": {
           "/usr/share/mime/packages/canvas-app.xml": "packaging/canvas-app.xml"
         }
-      },
-      "appimage": {
-        "files": {
-          "/usr/share/mime/packages/canvas-app.xml": "packaging/canvas-app.xml"
-        }
       }
     }
   },
