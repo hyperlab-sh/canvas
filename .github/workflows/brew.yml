@@ -99,9 +99,10 @@ jobs:
           brew trust hyperlab-sh/tap 2> /dev/null || true
           brew audit --cask hyperlab-sh/tap/canvas-app
 
-      # --quarantine marks the download the way a user's install would, so the postflight has something to remove.
+      # Homebrew quarantines cask downloads by default (a user install does the same), so the postflight has something to remove.
       - name: Install the cask, check the quarantine, smoke the app
         run: |
+          unset HOMEBREW_CASK_OPTS
           export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1
           version="$(node -p "require('./package.json').version")"
           app_version="$(node scripts/app-assets.mjs version)"
@@ -112,7 +113,7 @@ jobs:
           mkdir -p "$tap/Formula"
           node scripts/render-formula.mjs "$version" assets --base http://127.0.0.1:8000 > "$tap/Formula/canvas.rb"
           node scripts/render-cask.mjs "$app_version" assets --base http://127.0.0.1:8000 > "$tap/Casks/canvas-app.rb"
-          brew install --cask --quarantine hyperlab-sh/tap/canvas-app
+          brew install --cask hyperlab-sh/tap/canvas-app
           brew list --formula canvas
 
           app=/Applications/Canvas.app
