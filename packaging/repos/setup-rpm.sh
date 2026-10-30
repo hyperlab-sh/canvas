@@ -1,6 +1,8 @@
 #!/bin/sh
 # Adds the signed Canvas yum/dnf/zypper repository (Fedora, RHEL and clones, openSUSE). Run as root; needs curl.
 #   setup-rpm.sh [site URL]      default: https://hyperlab-sh.github.io/canvas
+# The URL picks the site whose canvas.repo and canvas.asc are downloaded. That canvas.repo names its own baseurl and gpgkey (the URL
+# the site was built for), so a mirror must serve a canvas.repo built for the mirror. (setup-apt.sh writes the URL into the source line.)
 # Then: dnf install canvas canvas-app     or     zypper install canvas canvas-app
 set -eu
 base="${1:-https://hyperlab-sh.github.io/canvas}"

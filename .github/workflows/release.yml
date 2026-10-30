@@ -134,37 +134,79 @@ jobs:
     permissions:
       contents: write
     concurrency: gh-pages
+    env:
+      RELEASE_URL: https://hyperlab-sh.github.io/canvas
     steps:
+      # The scripts come from the tag; the site from gh-pages as it is now.
+      - uses: actions/checkout@v4
+        with:
+          path: src
+
       - uses: actions/checkout@v4
         with:
           ref: gh-pages
+          path: site
 
       - uses: actions/download-artifact@v4
         with:
           name: repos
           path: ${{ runner.temp }}/repos
 
-      # The trees extend the gh-pages commit the repos job saw. If another release pushed since, they would drop its packages:
-      # fail, and re-run the whole workflow so the trees are built again.
+      # The checked trees extend the gh-pages commit the repos job saw. If another release pushed since, they would drop its
+      # packages, so the trees are built again on the current gh-pages with the same script and key. Re-running this job alone
+      # recovers from that.
       - name: gh-pages has not moved since the trees were built
+        id: moved
         run: |
-          [ "$(git rev-parse HEAD)" = "${{ needs.repos.outputs.base_sha }}" ] || { echo "gh-pages moved while this release was built; re-run all jobs" >&2; exit 1; }
+          if [ "$(git -C site rev-parse HEAD)" = "${{ needs.repos.outputs.base_sha }}" ]; then echo "moved=false" >> "$GITHUB_OUTPUT"; else echo "gh-pages moved while this release was built; rebuilding the trees on it"; echo "moved=true" >> "$GITHUB_OUTPUT"; fi
 
-      - name: Commit the trees
+      - uses: actions/download-artifact@v4
+        if: steps.moved.outputs.moved == 'true'
+        with:
+          name: packages
+          path: in/packages
+
+      - uses: actions/download-artifact@v4
+        if: steps.moved.outputs.moved == 'true'
+        with:
+          name: app
+          path: in/app
+
+      - name: Rebuild the trees
+        if: steps.moved.outputs.moved == 'true'
+        env:
+          REPO_BASE_URL: ${{ env.RELEASE_URL }}
+          REPO_GPG_PRIVATE_KEY: ${{ secrets.REPO_GPG_PRIVATE_KEY }}
+          REPO_EXPECT_FPR: CBE706A42B7AED6141667D695239F12AF24A7030
         run: |
-          cp -a "$RUNNER_TEMP/repos/." .
+          sudo apt-get update
+          sudo apt-get install -y apt-utils createrepo-c rpm gnupg dpkg-dev
+          src/packaging/repos/build.sh site in/packages in/app
+
+      - name: Use the checked trees
+        if: steps.moved.outputs.moved == 'false'
+        run: cp -a "$RUNNER_TEMP/repos/." site/
+
+      # gh-pages keeps no history: the site is one parentless commit forced over the commit it was built on (the lease), so old
+      # packages do not pile up in the repository. The lease also fails the push if gh-pages moves in the meantime.
+      - name: Publish the trees as a single commit
+        run: |
+          cd site
+          base="$(git rev-parse HEAD)"
           git config user.name "canvas release"
           git config user.email "actions@users.noreply.github.com"
           git add -A
           git diff --cached --quiet && { echo "repositories unchanged"; exit 0; }
+          git checkout --orphan pages-new
+          git add -A
           git commit -m "chore(repos): canvas ${GITHUB_REF_NAME#v}"
-          git push origin HEAD:gh-pages
+          git push --force-with-lease="gh-pages:$base" origin HEAD:gh-pages
 
       # Pages deploys after the push and its CDN may keep the old file for ten minutes; ask with a fresh query string and wait up to 20.
       - name: Pages serves it
         run: |
           for _ in $(seq 1 80); do
-            curl -fsS "https://hyperlab-sh.github.io/canvas/apt/dists/stable/InRelease?ts=$(date +%s)" -o "$RUNNER_TEMP/InRelease" && cmp -s "$RUNNER_TEMP/InRelease" apt/dists/stable/InRelease && exit 0
+            curl -fsS "$RELEASE_URL/apt/dists/stable/InRelease?ts=$(date +%s)" -o "$RUNNER_TEMP/InRelease" && cmp -s "$RUNNER_TEMP/InRelease" site/apt/dists/stable/InRelease && exit 0
             sleep 15
           done
           echo "Pages does not serve the pushed InRelease" >&2

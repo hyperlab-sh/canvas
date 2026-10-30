@@ -95,6 +95,10 @@ test('the release workflow signs and publishes only for a real tag, and the publ
   assert.equal(publish.field('needs'), '[repos, github-release]');
   assert.equal(publish.field('if'), tag);
   assert.match(publish.text, /needs\.repos\.outputs\.base_sha/);
+  // One parentless commit, forced only over the commit the trees were built on.
+  assert.match(publish.text, /git checkout --orphan/);
+  assert.match(publish.text, /git push --force-with-lease="gh-pages:\$base" origin HEAD:gh-pages/);
+  assert.doesNotMatch(publish.text, /git push origin/);
   assert.equal(job('ci.yml', 'repos').field('needs'), '[packages, app]');
   assert.equal(job('ci.yml', 'repos').field('uses'), './.github/workflows/repos.yml');
   assert.equal(job('ci.yml', 'repos').field('release', 6), undefined);
@@ -144,6 +148,10 @@ test('the check passes when only older versions went, and names a file that went
   assert.deepEqual(problems(before, before.slice(1)), [`${deb('canvas', '0.1.0')} disappeared`]);
   // A newer file replaced an older one of another package: not an excuse.
   assert.deepEqual(problems(before, [...before.slice(1), deb('canvas-app', '0.4.0')]), [`${deb('canvas', '0.1.0')} disappeared`]);
+});
+
+test('the check names an earlier file whose name is not a package name', () => {
+  assert.deepEqual(problems(['apt/pool/main/x/odd/odd.deb'], []), ['apt/pool/main/x/odd/odd.deb disappeared']);
 });
 
 test('listPool and the CLI prune work on a real tree', () => {
