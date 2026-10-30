@@ -50,9 +50,9 @@ ${platform('linux', 'x64').replace(/^/gm, '  ')}
   end
 
   def caveats
-    <<~EOS
-      The desktop app is a separate cask:
-        brew install --cask hyperlab-sh/tap/canvas-app
+    # The cask is macOS-only, so Linux users are not pointed at it.
+    app = OS.mac? ? "The desktop app is a separate cask:\\n  brew install --cask hyperlab-sh/tap/canvas-app\\n" : ""
+    app + <<~EOS
       Keep it running in the background (and at every login):
         canvas service install
       The service points at #{opt_libexec}/bin/canvas, so \`brew upgrade canvas\` keeps it working.
