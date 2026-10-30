@@ -41,10 +41,10 @@ pub fn probe(port: u16) -> bool {
 /// First `name` (with each `PATHEXT` suffix on Windows) in the `path_var` directories for which `is_file` holds.
 pub fn find_on_path(name: &str, path_var: &std::ffi::OsStr, extensions: &[String], is_file: impl Fn(&Path) -> bool) -> Option<PathBuf> {
     std::env::split_paths(path_var).find_map(|dir| {
-        std::iter::once(String::new())
-            .chain(extensions.iter().cloned())
-            .map(|extension| dir.join(format!("{name}{extension}")))
-            .find(|candidate| is_file(candidate))
+        // With extensions (Windows) only those count: an extensionless file next to `canvas.cmd` is the
+        // npm shell shim, which Windows cannot run.
+        let suffixes: Vec<&str> = if extensions.is_empty() { vec![""] } else { extensions.iter().map(String::as_str).collect() };
+        suffixes.into_iter().map(|suffix| dir.join(format!("{name}{suffix}"))).find(|candidate| is_file(candidate))
     })
 }
 
@@ -56,7 +56,7 @@ pub fn fallback_dirs(home: Option<&Path>, local_app_data: Option<&Path>, app_dat
         dirs.extend([".bun/bin", ".local/bin", ".npm-global/bin"].map(|dir| home.join(dir)));
     }
     if let Some(local) = local_app_data {
-        dirs.push(local.join("Programs"));
+        dirs.push(local.join("canvas").join("bin"));
     }
     if let Some(roaming) = app_data {
         dirs.push(roaming.join("npm"));
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn fallback_dirs_come_in_a_fixed_order() {
         let dirs = fallback_dirs(Some(Path::new("/h")), Some(Path::new("C:/L")), Some(Path::new("C:/R")));
-        let expected: Vec<PathBuf> = ["/opt/homebrew/bin", "/usr/local/bin", "/h/.bun/bin", "/h/.local/bin", "/h/.npm-global/bin", "C:/L/Programs", "C:/R/npm"].map(PathBuf::from).to_vec();
+        let expected: Vec<PathBuf> = ["/opt/homebrew/bin", "/usr/local/bin", "/h/.bun/bin", "/h/.local/bin", "/h/.npm-global/bin", "C:/L/canvas/bin", "C:/R/npm"].map(PathBuf::from).to_vec();
         assert_eq!(dirs, expected);
         assert_eq!(fallback_dirs(None, None, None), vec![PathBuf::from("/opt/homebrew/bin"), PathBuf::from("/usr/local/bin")]);
     }
@@ -242,6 +242,14 @@ mod tests {
         assert!(is_runnable(&file));
         assert!(!is_runnable(dir.path()));
         assert!(!is_runnable(&dir.path().join("missing")));
+    }
+
+    #[test]
+    fn with_extensions_an_extensionless_shim_is_skipped() {
+        let extensions = vec![".exe".to_string(), ".cmd".to_string()];
+        let found = find_on_path("canvas", &path_of(&["/a"]), &extensions, |p| p == Path::new("/a/canvas") || p == Path::new("/a/canvas.cmd"));
+        assert_eq!(found, Some(PathBuf::from("/a/canvas.cmd")));
+        assert_eq!(find_on_path("canvas", &path_of(&["/a"]), &extensions, |p| p == Path::new("/a/canvas")), None);
     }
 
     #[test]
