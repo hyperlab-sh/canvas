@@ -15,7 +15,17 @@ let leaving = false;
 const say = (text) => { status.textContent = text; };
 const explain = (text) => { detail.textContent = text; detail.hidden = !text; };
 
+// One probe at a time: the next check is scheduled when this one ends, so two never overlap and race
+// to open the editor (the second would drop the diagram a deep link asked for).
 async function check() {
+  try {
+    await probeOnce();
+  } finally {
+    if (!leaving) setTimeout(check, POLL_MS);
+  }
+}
+
+async function probeOnce() {
   if (leaving) return;
   let state;
   try {
@@ -69,4 +79,3 @@ start.addEventListener('click', async () => {
 });
 
 check();
-setInterval(check, POLL_MS);
