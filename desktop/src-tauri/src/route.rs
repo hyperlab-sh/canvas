@@ -28,12 +28,24 @@ pub fn start_target(smoke: bool, service_up: bool, cold_link: Option<&OpenTarget
 pub enum LinkAction {
     /// The service answers: show the diagram.
     Navigate(String),
-    /// It does not: hold the URL and show the bundled page, which polls and hands over.
+    /// It does not and the bundled page is already showing: hold the URL, the page hands over.
+    HoldOnly(String),
+    /// It does not and the window shows something else (a dead editor): hold the URL and show the bundled page.
     HoldAndShowBundled(String),
 }
 
-pub fn after_link(service_up: bool, url: String) -> LinkAction {
-    if service_up { LinkAction::Navigate(url) } else { LinkAction::HoldAndShowBundled(url) }
+pub fn after_link(service_up: bool, on_bundled: bool, url: String) -> LinkAction {
+    match (service_up, on_bundled) {
+        (true, _) => LinkAction::Navigate(url),
+        (false, true) => LinkAction::HoldOnly(url),
+        (false, false) => LinkAction::HoldAndShowBundled(url),
+    }
+}
+
+/// Whether the bundled page's hand-over may navigate: only while the bundled page is still showing, so a
+/// link that already moved the window to a diagram is not overwritten by the page's in-flight probe.
+pub fn may_hand_over(on_bundled: bool) -> bool {
+    on_bundled
 }
 
 /// What `open_service` navigates to: the held link, else the origin. The link stays held until that works.
@@ -78,8 +90,21 @@ mod tests {
 
     #[test]
     fn a_link_navigates_when_up_and_is_held_with_the_bundled_page_when_down() {
-        assert_eq!(after_link(true, "u".into()), LinkAction::Navigate("u".into()));
-        assert_eq!(after_link(false, "u".into()), LinkAction::HoldAndShowBundled("u".into()));
+        for on_bundled in [true, false] {
+            assert_eq!(after_link(true, on_bundled, "u".into()), LinkAction::Navigate("u".into()));
+        }
+        assert_eq!(after_link(false, false, "u".into()), LinkAction::HoldAndShowBundled("u".into()));
+    }
+
+    #[test]
+    fn a_link_while_down_does_not_reload_the_bundled_page() {
+        assert_eq!(after_link(false, true, "u".into()), LinkAction::HoldOnly("u".into()));
+    }
+
+    #[test]
+    fn hand_over_only_from_the_bundled_page() {
+        assert!(may_hand_over(true));
+        assert!(!may_hand_over(false));
     }
 
     #[test]

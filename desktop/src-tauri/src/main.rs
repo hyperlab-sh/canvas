@@ -60,29 +60,31 @@ fn handle_deep_link(app: &AppHandle, link: &str) {
     std::thread::spawn(move || {
         let state = app.state::<AppState>();
         let url = deeplink::editor_url(&origin(&state), &target);
-        let port = state.port;
-        let action = route::after_link(service::probe(port), url);
+        let up = service::probe(state.port);
         let on_main = app.clone();
         let _ = app.run_on_main_thread(move || {
-            match action {
+            match route::after_link(up, on_bundled(&on_main), url) {
                 route::LinkAction::Navigate(url) => {
                     if let Err(error) = navigate(&on_main, &url) {
                         eprintln!("canvas-app: cannot open {url}: {error}");
                     }
                 }
+                route::LinkAction::HoldOnly(url) => *on_main.state::<AppState>().pending.lock().unwrap() = Some(url),
                 route::LinkAction::HoldAndShowBundled(url) => {
                     *on_main.state::<AppState>().pending.lock().unwrap() = Some(url);
-                    let on_bundled = main_window(&on_main).and_then(|window| window.url().ok()).is_some_and(|current| nav::is_bundled(&current));
-                    if !on_bundled {
-                        if let Err(error) = navigate(&on_main, nav::bundled_url().as_str()) {
-                            eprintln!("canvas-app: cannot show the service page: {error}");
-                        }
+                    if let Err(error) = navigate(&on_main, nav::bundled_url().as_str()) {
+                        eprintln!("canvas-app: cannot show the service page: {error}");
                     }
                 }
             }
             focus(&on_main);
         });
     });
+}
+
+/// Whether the window currently shows the bundled page.
+fn on_bundled(app: &AppHandle) -> bool {
+    main_window(app).and_then(|window| window.url().ok()).is_some_and(|current| nav::is_bundled(&current))
 }
 
 #[tauri::command]
@@ -106,6 +108,9 @@ async fn start_service(state: State<'_, AppState>) -> Result<(), String> {
 /// released only once the navigation worked, so a failed attempt does not turn into the home page.
 #[tauri::command]
 async fn open_service(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    if !route::may_hand_over(on_bundled(&app)) {
+        return Ok(());
+    }
     let url = route::open_url(state.pending.lock().unwrap().as_deref(), &origin(&state));
     navigate(&app, &url)?;
     *state.pending.lock().unwrap() = None;

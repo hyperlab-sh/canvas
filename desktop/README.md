@@ -8,7 +8,7 @@ it shows `http://127.0.0.1:<port>`, where `canvas serve` (or `canvas service ins
   detached when `canvas` is on your `PATH`. The page keeps retrying and opens the editor once the service answers.
   This button is the only thing in the app that starts a process. `canvas` is looked up on `PATH`, then in
   `/opt/homebrew/bin`, `/usr/local/bin`, `~/.bun/bin`, `~/.local/bin` and `~/.npm-global/bin` (on Windows
-  also `%LOCALAPPDATA%\Programs` and `%APPDATA%\npm`), because an app opened from the Finder, Dock or a menu
+  also `%LOCALAPPDATA%\canvas\bin` and `%APPDATA%\npm`), because an app opened from the Finder, Dock or a menu
   gets a minimal `PATH`; no shell is started to find it.
 - **Port:** `CANVAS_PORT`, else `port` in the service config (`OPENFLOWKIT_SERVICE_CONFIG`, default
   `~/.config/openflowkit/service.json`), else `43120`. A port given only to `canvas service install --port N`
