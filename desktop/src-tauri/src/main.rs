@@ -181,8 +181,9 @@ async fn open_service(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
             let resolved = tauri::async_runtime::spawn_blocking(move || open_file::resolve(&origin, &file, &open_file::Service(port)))
                 .await
                 .map_err(|error| error.to_string())?;
-            // Resolving awaited: a link or drop that moved the window meanwhile wins.
-            if !route::may_hand_over(on_bundled(&app)) {
+            // Resolving awaited. A link or drop that moved the window wins; so does one that was held
+            // meanwhile (the service stopped answering), which the next hand-over serves.
+            if !route::may_hand_over(on_bundled(&app)) || state.pending.lock().unwrap().is_some() || state.pending_files.lock().unwrap().is_some() {
                 return Ok(());
             }
             resolved.unwrap_or_else(|error| {
