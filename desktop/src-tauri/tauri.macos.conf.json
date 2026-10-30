@@ -1,0 +1,21 @@
+{
+  "bundle": {
+    "fileAssociations": [
+      {
+        "ext": ["openflow"],
+        "name": "Canvas diagram text",
+        "description": "Canvas diagram text",
+        "mimeType": "text/x-openflow",
+        "role": "Editor"
+      },
+      {
+        "ext": ["mmd"],
+        "name": "Mermaid diagram",
+        "description": "Mermaid diagram",
+        "mimeType": "text/vnd.mermaid",
+        "role": "Editor",
+        "rank": "Alternate"
+      }
+    ]
+  }
+}
