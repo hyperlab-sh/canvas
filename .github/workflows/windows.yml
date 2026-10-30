@@ -56,7 +56,8 @@ jobs:
           git -C "$bucket" init -q
           git -C "$bucket" add bucket
           git -C "$bucket" -c user.name=ci -c user.email=ci@example.invalid commit -q -m manifests
-          echo "BUCKET=$(cygpath -w "$bucket")" >> "$GITHUB_ENV"
+          # Scoop only takes a git URL, not a path.
+          echo "BUCKET=file:///$(cygpath -m "$bucket")" >> "$GITHUB_ENV"
 
       - name: scoop install canvas and canvas-app
         shell: pwsh
