@@ -42,6 +42,24 @@ pub fn after_link(service_up: bool, on_bundled: bool, url: String) -> LinkAction
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum FileAction {
+    /// The service answers: resolve the file and show it.
+    Open,
+    /// It does not and the bundled page is already showing: hold the file, the page hands over.
+    HoldOnly,
+    /// It does not and the window shows something else: hold the file and show the bundled page.
+    HoldAndShowBundled,
+}
+
+pub fn after_file(service_up: bool, on_bundled: bool) -> FileAction {
+    match (service_up, on_bundled) {
+        (true, _) => FileAction::Open,
+        (false, true) => FileAction::HoldOnly,
+        (false, false) => FileAction::HoldAndShowBundled,
+    }
+}
+
 /// Whether the bundled page's hand-over may navigate: only while the bundled page is still showing, so a
 /// link that already moved the window to a diagram is not overwritten by the page's in-flight probe.
 pub fn may_hand_over(on_bundled: bool) -> bool {
@@ -99,6 +117,15 @@ mod tests {
     #[test]
     fn a_link_while_down_does_not_reload_the_bundled_page() {
         assert_eq!(after_link(false, true, "u".into()), LinkAction::HoldOnly("u".into()));
+    }
+
+    #[test]
+    fn a_file_opens_when_up_and_is_held_when_down() {
+        for on_bundled in [true, false] {
+            assert_eq!(after_file(true, on_bundled), FileAction::Open);
+        }
+        assert_eq!(after_file(false, true), FileAction::HoldOnly);
+        assert_eq!(after_file(false, false), FileAction::HoldAndShowBundled);
     }
 
     #[test]

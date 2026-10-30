@@ -5,16 +5,21 @@ mod config;
 mod console;
 mod deeplink;
 mod download;
+mod dsl;
+mod files;
+mod http;
 mod nav;
+mod open_file;
 mod route;
 mod service;
 mod smoke;
 
+use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::sync::Mutex;
 
 use tauri::webview::DownloadEvent;
-use tauri::{AppHandle, Manager, State, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, DragDropEvent, Manager, State, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
 
 const WINDOW: &str = "main";
@@ -23,6 +28,9 @@ struct AppState {
     port: u16,
     /// A deep link that arrived while the service was not answering, opened once it is.
     pending: Mutex<Option<String>>,
+    /// Files opened (dropped, associated, argv) while the service was not answering; the newest request
+    /// replaces any held link and the other way round.
+    pending_files: Mutex<Vec<PathBuf>>,
     /// Set in `--smoke` mode only.
     smoke: Option<smoke::SmokeSender>,
 }
@@ -45,6 +53,8 @@ fn focus(app: &AppHandle) {
 
 fn navigate(app: &AppHandle, url: &str) -> Result<(), String> {
     let url = Url::parse(url).map_err(|error| error.to_string())?;
+    // The payload of a `#/from/dsl` link is long and carries the user's diagram: log the route only.
+    eprintln!("canvas-app: showing {}", url.as_str().split('?').next().unwrap_or_default());
     main_window(app).ok_or("the window is gone")?.navigate(url).map_err(|error| error.to_string())
 }
 
@@ -69,11 +79,57 @@ fn handle_deep_link(app: &AppHandle, link: &str) {
                         eprintln!("canvas-app: cannot open {url}: {error}");
                     }
                 }
-                route::LinkAction::HoldOnly(url) => *on_main.state::<AppState>().pending.lock().unwrap() = Some(url),
+                route::LinkAction::HoldOnly(url) => hold_link(&on_main, url),
                 route::LinkAction::HoldAndShowBundled(url) => {
-                    *on_main.state::<AppState>().pending.lock().unwrap() = Some(url);
+                    hold_link(&on_main, url);
                     if let Err(error) = navigate(&on_main, nav::bundled_url().as_str()) {
                         eprintln!("canvas-app: cannot show the service page: {error}");
+                    }
+                }
+            }
+            focus(&on_main);
+        });
+    });
+}
+
+/// Holds a deep link for the hand-over; it supersedes a held file.
+fn hold_link(app: &AppHandle, url: String) {
+    let state = app.state::<AppState>();
+    state.pending_files.lock().unwrap().clear();
+    *state.pending.lock().unwrap() = Some(url);
+}
+
+/// Opens the first openable file of `paths` (the OS hands over several only when the user selects several; one
+/// window shows one diagram). Resolving can import through the service, so it runs off the main thread.
+/// When the service is not answering the file is held and the bundled page is shown, as for a deep link.
+fn handle_files(app: &AppHandle, paths: Vec<PathBuf>) {
+    let Some(path) = paths.into_iter().next() else { return };
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let state = app.state::<AppState>();
+        let up = service::probe(state.port);
+        let resolved = if up { Some(open_file::resolve(&origin(&state), &path, &open_file::Service(state.port))) } else { None };
+        let on_main = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            let state = on_main.state::<AppState>();
+            match route::after_file(up, on_bundled(&on_main)) {
+                route::FileAction::Open => match resolved.expect("resolved while the service answers") {
+                    Ok(url) => {
+                        *state.pending.lock().unwrap() = None;
+                        state.pending_files.lock().unwrap().clear();
+                        if let Err(error) = navigate(&on_main, &url) {
+                            eprintln!("canvas-app: cannot open {}: {error}", path.display());
+                        }
+                    }
+                    Err(error) => eprintln!("canvas-app: cannot open {}: {error}", path.display()),
+                },
+                action => {
+                    *state.pending.lock().unwrap() = None;
+                    *state.pending_files.lock().unwrap() = vec![path];
+                    if action == route::FileAction::HoldAndShowBundled {
+                        if let Err(error) = navigate(&on_main, nav::bundled_url().as_str()) {
+                            eprintln!("canvas-app: cannot show the service page: {error}");
+                        }
                     }
                 }
             }
@@ -104,16 +160,34 @@ async fn start_service(state: State<'_, AppState>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || service::start(port)).await.map_err(|error| error.to_string())?
 }
 
-/// Leaves the bundled page for the editor (or the diagram a deep link asked for). The held link is
-/// released only once the navigation worked, so a failed attempt does not turn into the home page.
+/// Leaves the bundled page for the editor, the diagram a deep link asked for, or the file that was opened
+/// while the service was down. What was held is released only once the navigation worked, so a failed
+/// attempt does not turn into the home page.
 #[tauri::command]
 async fn open_service(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     if !route::may_hand_over(on_bundled(&app)) {
         return Ok(());
     }
-    let url = route::open_url(state.pending.lock().unwrap().as_deref(), &origin(&state));
+    let held_link = state.pending.lock().unwrap().clone();
+    let held_file = state.pending_files.lock().unwrap().first().cloned();
+    let (port, home) = (state.port, origin(&state));
+    let url = match (held_link, held_file) {
+        (Some(link), _) => route::open_url(Some(&link), &home),
+        (None, Some(file)) => {
+            let origin = home.clone();
+            let resolved = tauri::async_runtime::spawn_blocking(move || open_file::resolve(&origin, &file, &open_file::Service(port)))
+                .await
+                .map_err(|error| error.to_string())?;
+            resolved.unwrap_or_else(|error| {
+                eprintln!("canvas-app: cannot open the held file: {error}");
+                home
+            })
+        }
+        (None, None) => home,
+    };
     navigate(&app, &url)?;
     *state.pending.lock().unwrap() = None;
+    state.pending_files.lock().unwrap().clear();
     Ok(())
 }
 
@@ -130,14 +204,19 @@ fn run(smoke_mode: bool) {
     let state = AppState {
         port,
         pending: Mutex::new(None),
+        pending_files: Mutex::new(Vec::new()),
         smoke: smoke_mode.then(|| smoke::SmokeSender(Mutex::new(report_sender))),
     };
 
     let mut builder = tauri::Builder::default();
     if !smoke_mode {
         // Registered first (the plugin's rule). With its `deep-link` feature a second launch's link reaches
-        // `on_open_url` below, so this callback only brings the window forward.
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| focus(app)));
+        // `on_open_url` below, so this callback only brings the window forward and opens files.
+        // A second launch's file (an association opens a new process) arrives here as argv.
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            focus(app);
+            handle_files(app, files::from_args(argv.into_iter().skip(1)));
+        }));
     }
     let app = builder
         .plugin(tauri_plugin_deep_link::init())
@@ -164,13 +243,37 @@ fn run(smoke_mode: bool) {
                 let for_links = handle.clone();
                 app.deep_link().on_open_url(move |event| {
                     for url in event.urls() {
-                        handle_deep_link(&for_links, url.as_str());
+                        // macOS reports opened files here too; `RunEvent::Opened` takes those.
+                        if url.scheme() != "file" {
+                            handle_deep_link(&for_links, url.as_str());
+                        }
                     }
                 });
             }
 
+            // Files this process was launched with (an association's argv). Resolved here, before the window
+            // exists, so a running service opens straight on the diagram instead of flashing the home page.
+            let cold_files = if smoke_mode { Vec::new() } else { files::from_args(std::env::args().skip(1)) };
+            let cold_file_url = match cold_files.first() {
+                Some(file) if service_up => match open_file::resolve(&origin, file, &open_file::Service(port)) {
+                    Ok(url) => Some(url),
+                    Err(error) => {
+                        eprintln!("canvas-app: cannot open {}: {error}", file.display());
+                        None
+                    }
+                },
+                _ => None,
+            };
+
             let (first, held) = route::start_target(smoke_mode, service_up, cold_link.as_ref(), &origin);
+            let (first, held) = match cold_file_url {
+                Some(url) => (route::Start::External(url), None),
+                None => (first, held),
+            };
             *app.state::<AppState>().pending.lock().unwrap() = held;
+            if !service_up {
+                *app.state::<AppState>().pending_files.lock().unwrap() = cold_files.into_iter().take(1).collect();
+            }
             let start = match first {
                 route::Start::Bundled => WebviewUrl::App("index.html".into()),
                 route::Start::External(url) => WebviewUrl::External(Url::parse(&url).expect("an origin plus a route")),
@@ -229,6 +332,15 @@ fn run(smoke_mode: bool) {
             let window = window.build()?;
             let _ = window.show();
 
+            // The native drop handler stays on: the page never sees a dropped file, so WebKit has nothing
+            // to navigate to (and `nav::allowed` refuses `file:` anyway).
+            let for_drops = handle.clone();
+            window.on_window_event(move |event| {
+                if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
+                    handle_files(&for_drops, files::from_paths(paths));
+                }
+            });
+
             if smoke_mode {
                 let page = format!("{origin}/#/");
                 std::thread::spawn(move || {
@@ -242,7 +354,15 @@ fn run(smoke_mode: bool) {
         .build(tauri::generate_context!())
         .expect("error while building Canvas");
 
-    app.run(|_, _| {});
+    app.run(|app, event| {
+        // macOS delivers a double-clicked or `open -a` file as an event, not as argv.
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Opened { urls } = event {
+            handle_files(app, files::from_urls(urls.iter()));
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = (app, event);
+    });
 }
 
 fn main() {
