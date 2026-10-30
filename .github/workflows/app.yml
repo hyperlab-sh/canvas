@@ -89,22 +89,27 @@ jobs:
             # bsdtar expands zip files; the tar on PATH in Git Bash is GNU tar, which does not.
             "$SYSTEMROOT/System32/tar.exe" -xf "release/canvas-$version-$target.zip" -C cli
             canvas="$PWD/cli/bin/canvas.exe"
+            msi_log="$(cygpath -w "$RUNNER_TEMP/msi.log")"
             install() { # <installer file> <exe|msi>
               local file; file="$(cygpath -w "$PWD/app-bundles/$1")"
               if [ "$2" = msi ]; then
-                powershell -NoProfile -Command "\$p = Start-Process -Wait -PassThru msiexec -ArgumentList '/i','$file','/qn','/norestart'; exit \$p.ExitCode"
+                powershell -NoProfile -Command "\$p = Start-Process -Wait -PassThru msiexec -ArgumentList '/i','$file','/qn','/norestart','/l*v','$msi_log'; exit \$p.ExitCode"
               else
                 powershell -NoProfile -Command "\$p = Start-Process -Wait -PassThru '$file' -ArgumentList '/S'; exit \$p.ExitCode"
               fi
             }
-            # The NSIS installer installs per user, the MSI per machine; Tauri names both directories after the product.
+            where() { find "$LOCALAPPDATA" "/c/Program Files" "/c/Program Files (x86)" -maxdepth 3 -iname canvas-app.exe 2>/dev/null; }
+            # The NSIS installer first; its copy is removed (the uninstaller runs in place with _?=) so that what the MSI
+            # installs is the only canvas-app.exe on the machine.
             install "canvas-app-$app_version-$target-setup.exe" exe
-            install "canvas-app-$app_version-$target.msi" msi
-            for entry in "setup:$LOCALAPPDATA/Canvas" "msi:$PROGRAMFILES/Canvas"; do
-              dir="${entry#*:}"
-              [ -f "$dir/canvas-app.exe" ] || { echo "no $dir/canvas-app.exe after the ${entry%%:*} installer" >&2; ls -R "$LOCALAPPDATA/Canvas" "$PROGRAMFILES/Canvas" 2>&1 | head -30; exit 1; }
-              apps+=("${entry%%:*}:$dir/canvas-app.exe")
-            done
+            nsis="$(where)"; echo "nsis installed: $nsis"
+            [ -n "$nsis" ] || { echo "the NSIS installer left no canvas-app.exe" >&2; exit 1; }
+            apps+=("setup:$nsis")
+            "$(dirname "$nsis")/uninstall.exe" /S "_?=$(cygpath -w "$(dirname "$nsis")")"
+            install "canvas-app-$app_version-$target.msi" msi || { tail -40 "$RUNNER_TEMP/msi.log"; exit 1; }
+            msi="$(where)"; echo "msi installed: $msi"
+            [ -n "$msi" ] || { tail -60 "$RUNNER_TEMP/msi.log"; echo "the MSI left no canvas-app.exe" >&2; exit 1; }
+            apps+=("msi:$msi")
           else
             tar -xzf "release/canvas-$version-$target.tar.gz" -C cli
             canvas="$PWD/cli/bin/canvas"
