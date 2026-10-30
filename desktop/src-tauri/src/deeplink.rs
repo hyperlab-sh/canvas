@@ -54,11 +54,16 @@ pub fn parse_link(link: &str) -> Option<Link> {
     parse(link).map(Link::Open)
 }
 
+/// The editor's home screen. The service root `/` is the editor's catch-all, which opens an untitled diagram.
+pub fn home_url(origin: &str) -> String {
+    format!("{origin}/#/home")
+}
+
 /// The editor URL of a link.
 pub fn link_url(origin: &str, link: &Link) -> String {
     match link {
         Link::Open(target) => editor_url(origin, target),
-        Link::Home => format!("{origin}/"),
+        Link::Home => home_url(origin),
     }
 }
 
@@ -141,7 +146,7 @@ mod tests {
 
     #[test]
     fn the_home_link_shows_the_service_origin() {
-        assert_eq!(link_url("http://127.0.0.1:43120", &Link::Home), "http://127.0.0.1:43120/");
+        assert_eq!(link_url("http://127.0.0.1:43120", &Link::Home), "http://127.0.0.1:43120/#/home");
         assert_eq!(link_url("http://127.0.0.1:43120", &parse_link("canvas://open/a/b").unwrap()), "http://127.0.0.1:43120/#/p/a/b");
     }
 
