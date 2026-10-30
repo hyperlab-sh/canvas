@@ -15,8 +15,14 @@ RUN test -n "$VERSION" || { echo "pass --build-arg VERSION=<version>" >&2; exit 
 
 FROM debian:stable-slim
 
+ARG VERSION
+LABEL org.opencontainers.image.source="https://github.com/hyperlab-sh/canvas" \
+      org.opencontainers.image.description="canvas service" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="$VERSION"
+
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --uid 10001 --home-dir /data --no-create-home canvas \
  && install -d -o canvas -g canvas /data
@@ -34,4 +40,5 @@ WORKDIR /data
 
 # The service answers only Host 127.0.0.1, localhost and [::1], so publish the port and browse to http://127.0.0.1:43120.
 EXPOSE 43120
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD ["curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:43120/health"]
 ENTRYPOINT ["canvas", "serve"]
