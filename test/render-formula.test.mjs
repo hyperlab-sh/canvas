@@ -22,6 +22,13 @@ test('the caveats tell brew users the desktop app is a separate cask', () => {
   assert.match(caveats, /canvas service install/);
 });
 
+test('the cask line is shown on macOS only, because the cask is macOS-only', () => {
+  const formula = render();
+  const caveats = formula.slice(formula.indexOf('def caveats'), formula.indexOf('  test do'));
+  assert.match(caveats, /app = OS\.mac\? \? "[^"\n]*brew install --cask hyperlab-sh\/tap\/canvas-app[^"\n]*" : ""\n\s+app \+ <<~EOS/);
+  assert.ok(!caveats.slice(caveats.indexOf('<<~EOS')).includes('--cask'), 'the cask command must not be in the unconditional heredoc');
+});
+
 test('the formula still carries a url and sha256 per platform', () => {
   assert.equal(render().match(/sha256 "/g).length, 4);
 });
