@@ -58,7 +58,7 @@ if ! command -v curl >/dev/null 2>&1; then
     *) if command -v dnf >/dev/null 2>&1; then dnf install -y -q curl; else zypper --non-interactive install curl || [ $? -eq 106 ]; fi ;;
   esac
 fi
-OPENFLOWKIT_SERVICE_CONFIG="$tmp/service.json" canvas serve --port 43557 >"$tmp/serve.log" 2>&1 &
+CANVAS_SERVICE_CONFIG="$tmp/service.json" canvas serve --port 43557 >"$tmp/serve.log" 2>&1 &
 serve_pid=$!
 curl -fs --retry 30 --retry-connrefused --retry-delay 1 -o "$tmp/index.html" http://127.0.0.1:43557/ || { cat "$tmp/serve.log"; fail "canvas serve did not serve the app"; }
 grep -qi '<html' "$tmp/index.html" || fail "the served page is not the editor"

@@ -1,13 +1,12 @@
 # Contributing
 
-This repo only packages a fork of OpenFlowKit and ships the `paint-a-picture` skill. Changes to the editor, the
-service or the MCP server go to https://github.com/hyperlab-sh/openflowkit, not here.
+This repo only packages Canvas. Changes to the editor, the service or the MCP server go to
+https://github.com/hyperlab-sh/canvas-editor, not here. The agent skill lives in the hyper plugin (`/hyper:canvas`).
 
 ## What belongs here
 
 - `scripts/build.mjs`, `bin/`, `package.json`: how the package is built and run.
-- `skills/paint-a-picture/`: the agent skill.
-- Bumping the submodule to a newer fork commit.
+- Bumping the `editor` submodule to a newer commit.
 
 ## Development setup
 
@@ -32,4 +31,4 @@ Describe how you checked it: for the build, the `npm pack --dry-run` file count 
 
 ## Reporting bugs and ideas
 
-Use the issue templates. Say whether the problem is in the packaging or in the editor/service; the latter go to the fork.
+Use the issue templates. Say whether the problem is in the packaging or in the editor/service; the latter go to hyperlab-sh/canvas-editor.

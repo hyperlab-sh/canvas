@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo.svg" width="96" height="96" alt="Canvas logo"></p>
+
 # @hyperlab.sh/canvas
 
 [![CI](https://github.com/hyperlab-sh/canvas/actions/workflows/ci.yml/badge.svg)](https://github.com/hyperlab-sh/canvas/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/@hyperlab.sh/canvas)](https://www.npmjs.com/package/@hyperlab.sh/canvas) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -5,8 +7,8 @@
 A local diagram service for coding agents. An agent draws a diagram, you open a link and see it on a canvas, you
 comment on it, and the agent answers. Diagrams are plain `.openflow.json` files in folders you choose.
 
-It packages a build of the [hyperlab-sh/openflowkit](https://github.com/hyperlab-sh/openflowkit) fork (a fork of
-[OpenFlowKit](https://github.com/openflowkit/openflowkit)): the canvas editor, a local service that keeps the files
+It packages a build of [hyperlab-sh/canvas-editor](https://github.com/hyperlab-sh/canvas-editor) (which began as a
+fork of [OpenFlowKit](https://github.com/openflowkit/openflowkit)): the canvas editor, a local service that keeps the files
 and serves the editor, and an MCP server agents draw through.
 
 - [Install](#install)
@@ -229,14 +231,14 @@ Things to know:
 ## Projects and configuration
 
 A project is a name mapped to a folder, and a diagram is one `.openflow.json` file in it. The service reads
-`~/.config/openflowkit/service.json`, written on first run with one project, `scratch`, in
-`~/.local/share/openflowkit/diagrams`:
+`~/.config/canvas/service.json`, written on first run with one project, `scratch`, in
+`~/.local/share/canvas/diagrams`:
 
 ```json
 {
   "port": 43120,
   "projects": [
-    { "name": "scratch", "path": "/home/you/.local/share/openflowkit/diagrams" },
+    { "name": "scratch", "path": "/home/you/.local/share/canvas/diagrams" },
     { "name": "my-app", "path": "/home/you/code/my-app/diagrams" }
   ]
 }
@@ -251,11 +253,11 @@ diagrams.
 
 | Variable | Used by | Meaning |
 |---|---|---|
-| `OPENFLOWKIT_SERVICE_CONFIG` | `canvas serve` | Config file path (same as `--config`). |
-| `OPENFLOWKIT_APP_DIR` | `canvas serve` | The built editor to serve. Defaults to the one in this package. |
-| `OPENFLOWKIT_SERVICE_URL` | the MCP server | Where to find the service if you changed the port, e.g. `http://127.0.0.1:43200`. |
-| `OPENFLOWKIT_CHANNEL` | the MCP server | Set to `1` if your agent session was started with channels, so canvas comments reach the agent as they are written. |
-| `OPENFLOWKIT_CLI_NAME` | the CLI | The command name shown in help and errors. Defaults to `canvas` here. |
+| `CANVAS_SERVICE_CONFIG` | `canvas serve` | Config file path (same as `--config`). |
+| `CANVAS_APP_DIR` | `canvas serve` | The built editor to serve. Defaults to the one in this package. |
+| `CANVAS_SERVICE_URL` | the MCP server | Where to find the service if you changed the port, e.g. `http://127.0.0.1:43200`. |
+| `CANVAS_CHANNEL` | the MCP server | Set to `1` if your agent session was started with channels, so canvas comments reach the agent as they are written. |
+| `CANVAS_CLI_NAME` | the CLI | The command name shown in help and errors. Defaults to `canvas` here. |
 
 ## Connect an agent
 
@@ -272,8 +274,8 @@ An agent binds to a diagram with `connect_diagram` or by creating one with `crea
 session holds a diagram at a time: a held diagram is refused and the error names the holder, and you release it
 with Disconnect on the canvas. Comments you write on the canvas go to the session that holds the diagram.
 
-The `paint-a-picture` skill in [`skills/`](skills/paint-a-picture/SKILL.md) teaches an agent the whole flow. This repo is
-also a Claude Code plugin (`.claude-plugin/plugin.json`).
+The `canvas` skill in the [hyper](https://github.com/svallory/hyper-coding) Claude Code plugin (`/hyper:canvas`) teaches
+an agent the whole flow.
 
 ## Command reference
 
@@ -282,7 +284,7 @@ also a Claude Code plugin (`.claude-plugin/plugin.json`).
 | Command | What it does |
 |---|---|
 | `canvas serve [--port N] [--config path] [--app dir]` | Run the service and the editor in the foreground. |
-| `canvas open [diagram] [--app\|--browser] [--print]` | Open a diagram, or the editor home, in the desktop app when it is installed, in your browser otherwise, starting the service if needed. The app is detected without launching it (the bundle id `sh.hyperlab.canvas` through Spotlight or the Applications folders on macOS, the `canvas://` handler elsewhere). `--app` requires the app, opens it on the editor home (`canvas://home`, also when the app is already running) when no diagram is named, and exits 1 if the app is missing (printing the install command for the platform, how to add the package repository or Scoop bucket, and the releases page) or cannot start; only an auto-detected app falls back to the browser when it fails to start (on Windows a failed app start is not detected). The app only reaches the service at `127.0.0.1:43120`, so with another `OPENFLOWKIT_SERVICE_URL` the browser is used and `--app` is an error. `--browser` insists on the browser. `diagram` is a `.openflow.json` file in a project folder, `project/id`, or a diagram id or title; with none the editor home (`/#/home`) opens in the app when it is installed, else in the browser. `--print` writes the http link instead (`http://127.0.0.1:43120/#/home` with no diagram). |
+| `canvas open [diagram] [--app\|--browser] [--print]` | Open a diagram, or the editor home, in the desktop app when it is installed, in your browser otherwise, starting the service if needed. The app is detected without launching it (the bundle id `sh.hyperlab.canvas` through Spotlight or the Applications folders on macOS, the `canvas://` handler elsewhere). `--app` requires the app, opens it on the editor home (`canvas://home`, also when the app is already running) when no diagram is named, and exits 1 if the app is missing (printing the install command for the platform, how to add the package repository or Scoop bucket, and the releases page) or cannot start; only an auto-detected app falls back to the browser when it fails to start (on Windows a failed app start is not detected). The app only reaches the service at `127.0.0.1:43120`, so with another `CANVAS_SERVICE_URL` the browser is used and `--app` is an error. `--browser` insists on the browser. `diagram` is a `.openflow.json` file in a project folder, `project/id`, or a diagram id or title; with none the editor home (`/#/home`) opens in the app when it is installed, else in the browser. `--print` writes the http link instead (`http://127.0.0.1:43120/#/home` with no diagram). |
 | `canvas service <install\|status\|restart\|logs\|uninstall>` | Run it in the background. |
 | `canvas mcp` | The MCP server on stdio, for agents. |
 | `canvas render <file> -o out.svg` | Mermaid, D2, Structurizr or OpenFlow DSL to SVG. |
@@ -291,7 +293,7 @@ also a Claude Code plugin (`.claude-plugin/plugin.json`).
 
 ## Building and releasing
 
-The editor and server come from the `openflowkit` submodule, pinned to a commit of the fork's `main`.
+The editor and server come from the `editor` submodule, pinned to a commit of canvas-editor's `main`.
 
 ```sh
 git clone --recurse-submodules https://github.com/hyperlab-sh/canvas.git
@@ -301,7 +303,7 @@ npm test               # the service-installer tests
 node bin/canvas.js serve
 ```
 
-To take a newer fork: `git -C openflowkit fetch origin && git -C openflowkit checkout origin/main`, then commit the new
+To take a newer editor: `git -C editor fetch origin && git -C editor checkout origin/main`, then commit the new
 pointer. Release by bumping `version` in `package.json`, committing, and pushing the tag `vX.Y.Z`. The Release workflow
 then:
 
@@ -336,7 +338,7 @@ another directory.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Editor and service changes belong in the fork.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Editor and service changes belong in [canvas-editor](https://github.com/hyperlab-sh/canvas-editor).
 
 ## License
 
