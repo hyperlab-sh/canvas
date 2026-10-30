@@ -188,7 +188,7 @@ describe('installHint and the README', () => {
     for (const manager of ['apt', 'dnf', 'zypper']) {
       const command = installHint('linux', [manager]).split('\n').map((line) => line.trim()).find((line) => line.startsWith(`sudo ${manager} install`));
       assert.ok(command?.endsWith('canvas-app'), command);
-      assert.ok(readme.includes(`sudo ${manager} install`), `README has no ${manager} install line`);
+      assert.match(readme, new RegExp(`^sudo ${manager} install canvas canvas-app\\b`, 'm'), `README has no ${manager} repository install line`);
     }
   });
 });

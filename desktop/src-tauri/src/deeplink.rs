@@ -145,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    fn the_home_link_shows_the_service_origin() {
+    fn the_home_link_shows_the_editor_home() {
         assert_eq!(link_url("http://127.0.0.1:43120", &Link::Home), "http://127.0.0.1:43120/#/home");
         assert_eq!(link_url("http://127.0.0.1:43120", &parse_link("canvas://open/a/b").unwrap()), "http://127.0.0.1:43120/#/p/a/b");
     }
