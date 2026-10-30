@@ -97,6 +97,10 @@ jobs:
           # Current Homebrew's style rules reject `postflight` (A5 needs it: there is no quarantine step in postflight_steps).
           # Reported, not gating; audit gates.
           brew style --cask hyperlab-sh/tap/canvas-app || echo "::warning::brew style findings on the cask (see the log)"
+          # Audit loads the cask from an untrusted tap and has no full-name install to trust it. Its trust lives in a throwaway
+          # store, so the install step below starts from the untrusted tap a new user has.
+          export XDG_CONFIG_HOME="$RUNNER_TEMP/audit-config"
+          brew trust hyperlab-sh/tap
           brew audit --cask hyperlab-sh/tap/canvas-app
 
       # Homebrew quarantines cask downloads by default (a user install does the same). The postflight is proven to matter:
