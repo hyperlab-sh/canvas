@@ -9,7 +9,7 @@ All notable changes are listed here, newest first. The format follows
 ### Added
 - `canvas open [diagram] [--app|--browser] [--print]` opens a diagram (a file, `project/id`, or an id or title) in the desktop app when it is installed (through its `canvas://` link) and in the default browser otherwise, and starts the service when nothing answers. `--app` and `--browser` force one; `--print` still writes the http link.
 
-- Docker image `ghcr.io/hyperlab-sh/canvas:<version>` and `:latest` (linux/amd64 and linux/arm64): `canvas serve` from the release archive on `debian:stable-slim`, bound to all interfaces inside the container, projects in the `/data` volume. Publish the port as `-p 43120:43120` and browse to `http://127.0.0.1:43120`; the service has no authentication, so do not publish it beyond loopback. The `openflowkit` submodule moves to the fork commit that adds `serve --host` / `OPENFLOWKIT_SERVICE_HOST`.
+- Docker image `ghcr.io/hyperlab-sh/canvas:<version>` and `:latest` (linux/amd64 and linux/arm64): `canvas serve` from the release archive on `debian:stable-slim`, bound to all interfaces inside the container, projects in the `/data` volume. Publish the port as `-p 43120:43120` and browse to `http://127.0.0.1:43120`; the service has no authentication, so do not publish it beyond loopback. The service runs as uid 10001: use a named volume for `/data`, or pass `--user "$(id -u):$(id -g)"` when bind-mounting a host directory. The `openflowkit` submodule moves to the fork commit that adds `serve --host` / `OPENFLOWKIT_SERVICE_HOST`.
 
 ## [0.3.0]
 

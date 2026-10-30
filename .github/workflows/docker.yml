@@ -35,6 +35,7 @@ jobs:
       - name: Build the image
         run: |
           version="$(node -p "require('./package.json').version")"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
           docker buildx build --platform "linux/${{ matrix.arch }}" --build-arg "VERSION=$version" -f packaging/docker/Dockerfile --load -t canvas:test release
 
       # arm64 runs under QEMU here, so give the service time to start.
@@ -44,11 +45,17 @@ jobs:
           for _ in $(seq 1 60); do
             curl -fsS http://127.0.0.1:43120/health > health.json && break
             sleep 1
-          done || true
+          done
           docker logs canvas
           cat health.json
-          node -e "const h = JSON.parse(require('fs').readFileSync('health.json')); if (!h.ok || !h.version) process.exit(1)"
+          node -e "const h = JSON.parse(require('fs').readFileSync('health.json')); if (!h.ok || h.service !== 'openflowkit-service' || !h.version) process.exit(1)"
           curl -fsS -o /dev/null http://127.0.0.1:43120/
+
+      # /health reports the bundled service's version, so the canvas version is checked on the binary the image runs.
+      - name: The image runs the archive it was built for
+        run: |
+          [ "$(docker run --rm --entrypoint canvas canvas:test --version)" = "canvas $VERSION" ] || { echo "the image does not run canvas $VERSION" >&2; exit 1; }
+          [ "$(docker image inspect canvas:test --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')" = "$VERSION" ]
 
       - name: The service runs as an unprivileged user and keeps its projects in /data
         run: |

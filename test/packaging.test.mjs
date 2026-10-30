@@ -78,6 +78,7 @@ test('flake.nix builds exactly the systems the generator hashes', async () => {
   assert.deepEqual(targets, SYSTEMS);
 });
 
+// A cheap guard on the text; docker.yml builds and runs the image, and is the behavioral check.
 test('the Docker image runs canvas serve on all interfaces from the linux archive, with projects in a volume', () => {
   const file = readFileSync(new URL('../packaging/docker/Dockerfile', import.meta.url), 'utf8');
   assert.match(file, /^FROM debian:stable-slim$/m);
@@ -87,5 +88,11 @@ test('the Docker image runs canvas serve on all interfaces from the linux archiv
   assert.match(file, /OPENFLOWKIT_SERVICE_CONFIG=\/data\/service\.json/);
   assert.match(file, /^VOLUME \/data$/m);
   assert.match(file, /^USER canvas$/m);
+  // The extracted archive lands where the symlink and the entrypoint expect it.
+  assert.match(file, /tar -xzf [^\n]+ -C \/canvas/);
+  assert.match(file, /COPY --from=archive \/canvas \/usr\/lib\/canvas/);
+  assert.match(file, /ln -s \/usr\/lib\/canvas\/bin\/canvas \/usr\/local\/bin\/canvas/);
+  assert.match(file, /org\.opencontainers\.image\.source="https:\/\/github\.com\/hyperlab-sh\/canvas"/);
+  assert.match(file, /^HEALTHCHECK .*\/health/m);
   assert.match(file, /^ENTRYPOINT \["canvas", "serve"\]$/m);
 });

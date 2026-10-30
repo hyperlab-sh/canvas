@@ -96,6 +96,7 @@ jobs:
           sha256sum -c SHA256SUMS
 
   # ghcr.io/hyperlab-sh/canvas:<version> and :latest for amd64 and arm64, pushed only after the checked image and the release exist.
+  # GHCR creates the package private on the first push: set it to public once in the package settings (like the manual first npm publish).
   docker:
     needs: [binaries, docker-check, github-release]
     if: startsWith(github.ref, 'refs/tags/') && !inputs.dry_run
@@ -124,15 +125,24 @@ jobs:
       - name: Build and push
         run: |
           version="${GITHUB_REF_NAME#v}"
-          docker buildx build --platform linux/amd64,linux/arm64 --build-arg "VERSION=$version" -f packaging/docker/Dockerfile \
-            -t "ghcr.io/hyperlab-sh/canvas:$version" -t ghcr.io/hyperlab-sh/canvas:latest --push release
+          tags=(-t "ghcr.io/hyperlab-sh/canvas:$version")
+          # A prerelease (0.4.0-rc.1) never moves :latest.
+          case "$version" in *-*) ;; *) tags+=(-t ghcr.io/hyperlab-sh/canvas:latest) ;; esac
+          docker buildx build --platform linux/amd64,linux/arm64 --build-arg "VERSION=$version" -f packaging/docker/Dockerfile "${tags[@]}" --push release
 
-      - name: The pushed image answers /health
+      # Each pushed architecture is pulled and run; arm64 runs under QEMU.
+      - name: The pushed images answer /health
         run: |
-          docker run -d --name canvas -p 43120:43120 "ghcr.io/hyperlab-sh/canvas:${GITHUB_REF_NAME#v}"
-          for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:43120/health && exit 0; sleep 1; done
-          docker logs canvas
-          exit 1
+          image="ghcr.io/hyperlab-sh/canvas:${GITHUB_REF_NAME#v}"
+          port=43120
+          for arch in amd64 arm64; do
+            docker run -d --name "canvas-$arch" --platform "linux/$arch" -p "$port:43120" "$image"
+            ok=
+            for _ in $(seq 1 60); do curl -fsS "http://127.0.0.1:$port/health" && ok=1 && break; sleep 1; done
+            [ -n "$ok" ] || { docker logs "canvas-$arch"; echo "$arch did not answer /health" >&2; exit 1; }
+            echo
+            port=$((port + 1))
+          done
 
   # D7: the flake reads nix/release.json, which only exists once the release does. The dry run regenerates it from the built
   # archives and shows the diff without committing.
