@@ -61,6 +61,14 @@ jobs:
     needs: [binaries, app]
     uses: ./.github/workflows/brew.yml
 
+  # The signed apt and yum trees, built and installed from in clean containers; only repos-publish below pushes them.
+  repos:
+    needs: [packages, app]
+    uses: ./.github/workflows/repos.yml
+    with:
+      release: ${{ startsWith(github.ref, 'refs/tags/') && !inputs.dry_run }}
+    secrets: inherit
+
   # The dry run builds and checks the image; only the docker job below pushes it.
   docker-check:
     needs: binaries
@@ -117,6 +125,45 @@ jobs:
             grep -qF "  $f" SHA256SUMS || { echo "$f is not in SHA256SUMS" >&2; exit 1; }
           done
           sha256sum -c SHA256SUMS
+
+  # Pushes the checked trees to gh-pages (served at https://hyperlab-sh.github.io/canvas/). Prior versions stay in the pools.
+  repos-publish:
+    needs: [repos, github-release]
+    if: startsWith(github.ref, 'refs/tags/') && !inputs.dry_run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency: gh-pages
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: repos
+          path: ${{ runner.temp }}/repos
+
+      - name: Commit the trees
+        run: |
+          cp -a "$RUNNER_TEMP/repos/." .
+          git config user.name "canvas release"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && { echo "repositories unchanged"; exit 0; }
+          git commit -m "chore(repos): canvas ${GITHUB_REF_NAME#v}"
+          git pull --rebase origin gh-pages
+          git push origin HEAD:gh-pages
+
+      # Pages deploys after the push; wait until it serves the signed index we pushed.
+      - name: Pages serves it
+        run: |
+          for _ in $(seq 1 40); do
+            curl -fsS https://hyperlab-sh.github.io/canvas/apt/dists/stable/InRelease -o "$RUNNER_TEMP/InRelease" && cmp -s "$RUNNER_TEMP/InRelease" apt/dists/stable/InRelease && exit 0
+            sleep 15
+          done
+          echo "Pages does not serve the pushed InRelease" >&2
+          exit 1
 
   # ghcr.io/hyperlab-sh/canvas:<version> and :latest for amd64 and arm64, pushed only after the checked image and the release exist.
   # GHCR creates the package private on the first push: set it to public once in the package settings (like the manual first npm publish).
