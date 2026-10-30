@@ -102,20 +102,28 @@ pub fn owner(projects: &Value, folder: &Path, real: impl Fn(&Path) -> Option<Pat
     })
 }
 
-/// Whether the service lists a diagram `id` in `project`, and, when the listing names the file it was read
-/// from (`file` or `path`), whether that is `file`. The service skips files it does not scan (a different
-/// suffix case) and serves only one file of a duplicated id, so a path alone does not make it listed.
-pub fn lists(projects: &Value, project: &str, id: &str, file: &Path, real: impl Fn(&Path) -> Option<PathBuf>) -> bool {
-    let Some(entries) = projects.as_array().and_then(|all| all.iter().find(|candidate| candidate.get("name").and_then(Value::as_str) == Some(project))).and_then(|found| found.get("diagrams")).and_then(Value::as_array) else {
-        return false;
-    };
-    let Some(entry) = entries.iter().find(|entry| entry.get("id").and_then(Value::as_str) == Some(id)) else {
-        return false;
-    };
-    match entry.get("file").or_else(|| entry.get("path")).and_then(Value::as_str) {
-        Some(listed) => matches!((real(Path::new(listed)), real(file)), (Some(a), Some(b)) if a == b),
-        None => true,
-    }
+/// Whether the service lists a diagram `id` in `project`. The service scans only names ending in the exact,
+/// lower-case `.openflow.json`, so a file it skips (another suffix case) is not listed.
+pub fn lists(projects: &Value, project: &str, id: &str) -> bool {
+    projects
+        .as_array()
+        .and_then(|all| all.iter().find(|candidate| candidate.get("name").and_then(Value::as_str) == Some(project)))
+        .and_then(|found| found.get("diagrams"))
+        .and_then(Value::as_array)
+        .is_some_and(|entries| entries.iter().any(|entry| entry.get("id").and_then(Value::as_str) == Some(id)))
+}
+
+/// How many files in `folder` the service would read as the diagram `id`. The listing sends no file names, and
+/// the service answers 409 for an id two files share, so a count above one cannot be opened in place.
+pub fn holders(folder: &Path, id: &str) -> usize {
+    let Ok(entries) = std::fs::read_dir(folder) else { return 0 };
+    entries
+        .flatten()
+        .filter(|entry| entry.file_name().to_str().is_some_and(|name| name.ends_with(".openflow.json")))
+        .filter_map(|entry| std::fs::read(entry.path()).ok())
+        .filter_map(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .filter(|document| document.get("id").and_then(Value::as_str) == Some(id))
+        .count()
 }
 
 fn real_path(path: &Path) -> Option<PathBuf> {
@@ -141,7 +149,7 @@ fn open_diagram(origin: &str, path: &Path, backend: &dyn Backend) -> Result<Stri
     let folder = path.parent().filter(|parent| !parent.as_os_str().is_empty()).unwrap_or(Path::new("."));
     let projects = backend.projects()?;
     if let Some(project) = owner(&projects, folder, real_path) {
-        if lists(&projects, &project, id, path, real_path) {
+        if lists(&projects, &project, id) && holders(folder, id) <= 1 {
             return Ok(editor_url(origin, &OpenTarget { project, id: id.to_string() }));
         }
     }
@@ -257,14 +265,28 @@ mod tests {
     }
 
     #[test]
-    fn a_listing_that_names_another_file_for_the_id_means_a_duplicate_and_is_imported() {
+    fn two_files_sharing_an_id_are_both_imported() {
         let dir = tempfile::tempdir().unwrap();
         let first = write(dir.path(), "first.openflow.json", r#"{"id":"abc"}"#);
         let second = write(dir.path(), "second.openflow.json", r#"{"id":"abc"}"#);
-        let projects = json!([{ "name": "work", "path": dir.path(), "diagrams": [{ "id": "abc", "file": first }] }]);
-        assert_eq!(resolve(ORIGIN, &first, &fake_with(projects.clone())).unwrap(), "http://127.0.0.1:43120/#/p/work/abc");
-        let backend = fake_with(projects);
-        assert_eq!(resolve(ORIGIN, &second, &backend).unwrap(), format!("{ORIGIN}/#/p/{SCRATCH}/new-id"));
+        write(dir.path(), "other.openflow.json", r#"{"id":"zzz"}"#);
+        let projects = json!([{ "name": "work", "path": dir.path(), "diagrams": [{ "id": "abc", "title": "T", "modifiedAt": 1, "holder": null }] }]);
+        for file in [&first, &second] {
+            let backend = fake_with(projects.clone());
+            assert_eq!(resolve(ORIGIN, file, &backend).unwrap(), format!("{ORIGIN}/#/p/{SCRATCH}/new-id"));
+            assert_eq!(*backend.calls.borrow(), ["projects".to_string(), format!("create scratch {}", files::title(file)), "save scratch new-id".to_string()]);
+        }
+    }
+
+    #[test]
+    fn a_unique_id_beside_other_diagrams_opens_in_place() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write(dir.path(), "a.openflow.json", r#"{"id":"abc"}"#);
+        write(dir.path(), "b.openflow.json", r#"{"id":"def"}"#);
+        write(dir.path(), "notes.json", r#"{"id":"abc"}"#);
+        write(dir.path(), "broken.openflow.json", "not json");
+        let backend = fake_with(listed(dir.path(), "abc"));
+        assert_eq!(resolve(ORIGIN, &file, &backend).unwrap(), "http://127.0.0.1:43120/#/p/work/abc");
     }
 
     #[test]
@@ -309,14 +331,6 @@ mod tests {
         let backend = fake_with(json!([]));
         resolve(ORIGIN, &file, &backend).unwrap();
         assert_eq!(backend.calls.borrow()[1], "create scratch Order flow");
-    }
-
-    #[test]
-    fn a_failed_save_opens_nothing() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = write(dir.path(), "a.openflow.json", r#"{"id":"old"}"#);
-        let backend = Fake { projects: json!([]), fail_save: true, ..Default::default() };
-        assert_eq!(resolve(ORIGIN, &file, &backend), Err("created scratch/new-id but could not save it: boom".into()));
     }
 
     #[test]
@@ -402,12 +416,11 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_save_names_the_orphan() {
+    fn a_failed_save_opens_nothing_and_names_the_orphan() {
         let dir = tempfile::tempdir().unwrap();
         let file = write(dir.path(), "a.openflow.json", r#"{"id":"old"}"#);
         let backend = Fake { projects: json!([]), fail_save: true, ..Default::default() };
-        let error = resolve(ORIGIN, &file, &backend).unwrap_err();
-        assert!(error.contains("scratch/new-id"), "{error}");
+        assert_eq!(resolve(ORIGIN, &file, &backend), Err("created scratch/new-id but could not save it: boom".into()));
         assert!(backend.saved.borrow().is_empty());
     }
 
