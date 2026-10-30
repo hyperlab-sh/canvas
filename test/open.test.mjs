@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { appInstalled, appUrl, browserCommand, diagramUrl, parseOpenArgs, probeResult, resolveTarget, runOpen } from '../lib/open.js';
+import { APP_HOME_URL, appInstalled, appUrl, browserCommand, diagramUrl, installHint, linuxManagers, parseOpenArgs, probeResult, resolveTarget, runOpen } from '../lib/open.js';
 
 const BASE = 'http://127.0.0.1:43120';
 
@@ -161,6 +161,20 @@ function harness(overrides = {}) {
   return { calls, lines, paths, setUp: (value) => { up = value; }, run: (args) => runOpen(args, ctx) };
 }
 
+describe('installHint and linuxManagers', () => {
+  it('lists every Linux command when no manager is known', () => {
+    const text = installHint('linux');
+    for (const manager of ['apt', 'dnf', 'zypper']) assert.match(text, new RegExp(`sudo ${manager} install canvas-app`));
+  });
+  it('finds the package managers whose --version succeeds, in README order', () => {
+    const seen = [];
+    const found = linuxManagers((command, args) => { seen.push([command, ...args]); return { code: command === 'apt' || command === 'zypper' ? 0 : 1, stdout: '' }; });
+    assert.deepEqual(found, ['apt', 'zypper']);
+    assert.deepEqual(seen, [['apt', '--version'], ['dnf', '--version'], ['zypper', '--version']]);
+    assert.deepEqual(linuxManagers(() => { throw new Error('ENOENT'); }), []);
+  });
+});
+
 describe('runOpen', () => {
   it('opens the home page without touching the project list', async () => {
     const h = harness();
@@ -236,12 +250,25 @@ describe('runOpen', () => {
     assert.equal(h.calls.started.length, 1);
     assert.equal(probed, false);
   });
-  it('--app without a diagram is a usage error', async () => {
+  it('--app without a diagram opens the app on its home page', async () => {
     const h = harness({ detectApp: () => true });
-    assert.equal(await h.run(['--app']), 2);
-    assert.match(h.lines.err.join('\n'), /--app needs a diagram/);
-    assert.deepEqual(h.calls.opened, []);
+    assert.equal(await h.run(['--app']), 0);
+    assert.deepEqual(h.calls.opened, [['open', APP_HOME_URL]]);
+    assert.deepEqual(h.calls.fetch, [`${BASE}/health`]);
     assert.equal(await h.run(['--app', '--help']), 0);
+  });
+  it('--app without a diagram starts the service first', async () => {
+    const h = harness({ detectApp: () => true });
+    h.setUp(false);
+    assert.equal(await h.run(['--app']), 0);
+    assert.equal(h.calls.started.length, 1);
+  });
+  it('--app without a diagram and without the app prints the install hint and opens nothing', async () => {
+    const h = harness({ detectApp: () => false });
+    assert.equal(await h.run(['--app']), 1);
+    assert.match(h.lines.err.join('\n'), /desktop app is not installed[\s\S]*brew install --cask hyperlab-sh\/tap\/canvas-app/);
+    assert.deepEqual(h.calls.opened, []);
+    assert.deepEqual(h.calls.started, []);
   });
   it('opens the browser when the app is not detected', async () => {
     const h = harness({ detectApp: () => false });
@@ -254,6 +281,27 @@ describe('runOpen', () => {
     assert.match(h.lines.err.join('\n'), /desktop app is not installed/);
     assert.deepEqual(h.calls.opened, []);
   });
+  for (const [platform, managers, expected, absent] of [
+    ['darwin', [], ['brew install --cask hyperlab-sh/tap/canvas-app'], ['apt', 'scoop']],
+    ['win32', [], ['scoop install canvas-app'], ['brew', 'apt install']],
+    ['linux', ['apt'], ['sudo apt install canvas-app'], ['dnf install', 'zypper install', 'brew']],
+    ['linux', ['dnf'], ['sudo dnf install canvas-app'], ['apt install', 'zypper install']],
+    ['linux', ['zypper'], ['sudo zypper install canvas-app'], ['apt install', 'dnf install']],
+    ['linux', [], ['sudo apt install canvas-app', 'sudo dnf install canvas-app', 'sudo zypper install canvas-app'], ['brew', 'scoop']],
+  ]) {
+    it(`--app without the app on ${platform}${managers.length ? ` with ${managers[0]}` : ' with no package manager'} prints that platform's command`, async () => {
+      const h = harness({ platform, detectApp: () => false, detectManagers: () => managers });
+      for (const args of [['--app'], ['notes/flow', '--app']]) {
+        h.lines.err.length = 0;
+        assert.equal(await h.run(args), 1);
+        const text = h.lines.err.join('\n');
+        for (const command of expected) assert.ok(text.includes(command), `${command} in ${text}`);
+        for (const other of absent) assert.ok(!text.includes(other), `${other} not in ${text}`);
+        assert.ok(text.includes('https://github.com/hyperlab-sh/canvas/releases'));
+      }
+      assert.deepEqual(h.calls.opened, []);
+    });
+  }
   it('uses the browser without probing when the service is not at the default URL', async () => {
     let probed = false;
     const h = harness({ env: { OPENFLOWKIT_SERVICE_URL: 'http://127.0.0.1:43999' }, detectApp: () => { probed = true; return true; } });

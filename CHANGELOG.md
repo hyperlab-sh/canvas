@@ -6,6 +6,9 @@ All notable changes are listed here, newest first. The format follows
 
 ## [Unreleased]
 
+### Changed
+- `canvas open --app` without a diagram opens the desktop app on its home page. When the app is missing, `--app` exits 1 and prints the install command for the platform (and the releases page). The Homebrew formula's caveats name the `canvas-app` cask.
+
 ## [0.4.0]
 
 ### Added
