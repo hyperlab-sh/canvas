@@ -1,5 +1,5 @@
 // Writes the winget manifests for a release from its SHA256SUMS, in the layout of microsoft/winget-pkgs.
-//   node scripts/render-winget.mjs <canvas|canvas-app> <version> <release-dir|SHA256SUMS> --out <dir> [--base <download base url>]
+//   node scripts/render-winget.mjs <canvas|canvas-app> <version> <release-dir|SHA256SUMS> --out <dir>
 // `canvas` is Hyperlab.Canvas (the release zip as a portable); `canvas-app` is Hyperlab.CanvasApp (the MSI, which depends on it).
 // CI validates the files with `winget validate` and uploads them; the pull request to microsoft/winget-pkgs is opened by hand.
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -29,7 +29,8 @@ const PACKAGES = {
 };
 
 /** The manifest files of package `name` at `version` as { relative path: text }; `sums` maps release asset names to their sha256. */
-export function renderWinget(name, version, sums, base = `${REPO}/releases/download/v${version}`, sumsFile = 'SHA256SUMS') {
+export function renderWinget(name, version, sums, sumsFile = 'SHA256SUMS') {
+  const base = `${REPO}/releases/download/v${version}`;
   const pkg = PACKAGES[name];
   if (!pkg) throw new Error(`unknown package "${name}"; one of: ${Object.keys(PACKAGES).join(', ')}`);
   const asset = name === 'canvas' ? `canvas-${version}-windows-x64.zip` : assetName(version, 'windows-x64', 'msi');
@@ -88,9 +89,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [name, version, source, ...rest] = process.argv.slice(2);
   const option = (flag) => (rest.includes(flag) ? rest[rest.indexOf(flag) + 1] : undefined);
   const out = option('--out');
-  if (!name || !version || !source || !out) throw new Error('usage: render-winget.mjs <canvas|canvas-app> <version> <release-dir|SHA256SUMS> --out <dir> [--base <url>]');
+  if (!name || !version || !source || !out) throw new Error('usage: render-winget.mjs <canvas|canvas-app> <version> <release-dir|SHA256SUMS> --out <dir>');
   const sumsFile = statSync(source).isDirectory() ? join(source, 'SHA256SUMS') : source;
-  for (const [file, text] of Object.entries(renderWinget(name, version, parseSums(readFileSync(sumsFile, 'utf8')), option('--base'), sumsFile))) {
+  for (const [file, text] of Object.entries(renderWinget(name, version, parseSums(readFileSync(sumsFile, 'utf8')), sumsFile))) {
     mkdirSync(join(out, file, '..'), { recursive: true });
     writeFileSync(join(out, file), text);
     console.log(file);

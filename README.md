@@ -179,7 +179,8 @@ then:
    (`scripts/render-scoop.mjs`) to the tap's `bucket/` folder;
 3. renders and validates the winget manifests for `Hyperlab.Canvas` and `Hyperlab.CanvasApp` (`scripts/render-winget.mjs`,
    `winget validate`) and uploads them as the `winget-manifests` workflow artifact; the pull request to
-   `microsoft/winget-pkgs` is opened by hand from it;
+   `microsoft/winget-pkgs` is opened by hand from it: submit `Hyperlab.Canvas` first and `Hyperlab.CanvasApp` once that is merged, because the app
+   manifest depends on the CLI package and the winget-pkgs checks reject it otherwise;
 4. publishes the npm package through npm trusted publishing (the repo and `release.yml` are registered as the trusted
    publisher on npmjs.com, so no token is stored) with provenance.
 

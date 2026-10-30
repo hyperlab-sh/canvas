@@ -81,10 +81,6 @@ test('the locale file carries publisher, license and a description', () => {
   assert.match(locale, /^Tags:\n- diagram/m);
 });
 
-test('--base replaces the download base', () => {
-  assert.match(file(renderWinget('canvas', '0.4.0', sums, 'http://127.0.0.1:8000'), '.installer.yaml'), /InstallerUrl: http:\/\/127\.0\.0\.1:8000\/canvas-0\.4\.0-windows-x64\.zip/);
-});
-
 test('a missing asset is refused, naming the file', () => {
   const { 'canvas-0.4.0-windows-x64.zip': _, ...noZip } = sums;
   assert.throws(() => renderWinget('canvas', '0.4.0', noZip), /canvas-0\.4\.0-windows-x64\.zip is not in SHA256SUMS/);
