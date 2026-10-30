@@ -119,9 +119,13 @@ jobs:
           if [ "$PUBLISH" = true ]; then version="${GITHUB_REF_NAME#v}"; else version="$(node -p "require('./package.json').version")"; fi
           node scripts/render-nix-release.mjs "$version" release/SHA256SUMS > nix/release.json
           git diff --stat -- nix/release.json
+          cat nix/release.json
 
       - uses: cachix/install-nix-action@v31
-        if: env.PUBLISH == 'true'
+
+      # Evaluates only, so it needs no published archives: the dry run proves the flake accepts the regenerated file.
+      - name: The flake evaluates with it
+        run: nix flake check --all-systems
 
       # The archives are only downloadable once the release exists, so a dry run cannot run them.
       - name: nix run prints the released version
