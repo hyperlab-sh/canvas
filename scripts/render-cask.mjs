@@ -34,9 +34,8 @@ cask "canvas-app" do
   app "Canvas.app"
 
   # The app is not signed or notarized (no Apple Developer account), so Gatekeeper would refuse the quarantined copy.
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Canvas.app"]
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/Canvas.app"]
   end
 
   zap trash: [

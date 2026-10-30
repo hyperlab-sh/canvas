@@ -34,9 +34,13 @@ test('the cask is macOS-only', () => {
   assert.match(renderCask('0.4.0', sums), /^  depends_on :macos$/m);
 });
 
-test('the postflight removes com.apple.quarantine from the installed app (A5)', () => {
+test('postflight_steps removes com.apple.quarantine from the installed app (A5)', () => {
   const cask = renderCask('0.4.0', sums);
-  assert.match(cask, /postflight do\n\s+system_command "\/usr\/bin\/xattr",\n\s+args: \["-dr", "com\.apple\.quarantine", "#\{appdir\}\/Canvas\.app"\]\n\s+end/);
+  assert.match(cask, /^  postflight_steps do\n    run "\/usr\/bin\/xattr", args: \["-dr", "com\.apple\.quarantine", "\{\{appdir\}\}\/Canvas\.app"\]\n  end$/m);
+});
+
+test('the deprecated postflight stanza is not used', () => {
+  assert.doesNotMatch(renderCask('0.4.0', sums), /^\s*postflight do\b|system_command/m);
 });
 
 test('--base replaces the download base', () => {
