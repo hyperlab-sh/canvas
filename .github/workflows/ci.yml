@@ -94,6 +94,11 @@ jobs:
     needs: native
     uses: ./.github/workflows/packages.yml
 
+  # Dry run of the image publish: builds both architectures from the release archives and checks /health; pushes nothing.
+  docker:
+    needs: native
+    uses: ./.github/workflows/docker.yml
+
   # The flake runs the release archive named in nix/release.json, and that file matches the published SHA256SUMS.
   nix:
     runs-on: ubuntu-latest

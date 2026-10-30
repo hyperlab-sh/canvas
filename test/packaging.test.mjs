@@ -77,3 +77,15 @@ test('flake.nix builds exactly the systems the generator hashes', async () => {
   const targets = Object.fromEntries([...block.matchAll(/([\w-]+) = "([\w-]+)";/g)].map((m) => [m[1], m[2]]));
   assert.deepEqual(targets, SYSTEMS);
 });
+
+test('the Docker image runs canvas serve on all interfaces from the linux archive, with projects in a volume', () => {
+  const file = readFileSync(new URL('../packaging/docker/Dockerfile', import.meta.url), 'utf8');
+  assert.match(file, /^FROM debian:stable-slim$/m);
+  assert.match(file, /amd64\) cpu=x64 ;; arm64\) cpu=arm64/);
+  assert.match(file, /canvas-\$\{VERSION\}-linux-\$\{cpu\}\.tar\.gz/);
+  assert.match(file, /OPENFLOWKIT_SERVICE_HOST=0\.0\.0\.0/);
+  assert.match(file, /OPENFLOWKIT_SERVICE_CONFIG=\/data\/service\.json/);
+  assert.match(file, /^VOLUME \/data$/m);
+  assert.match(file, /^USER canvas$/m);
+  assert.match(file, /^ENTRYPOINT \["canvas", "serve"\]$/m);
+});
