@@ -112,6 +112,12 @@ jobs:
     needs: [packages, app]
     uses: ./.github/workflows/repos.yml
 
+  # Dry run of the bucket and the winget manifests: both Scoop manifests installed on a clean Windows runner from a local bucket
+  # rendered against the dry-run assets, and both winget manifests validated; pushes and submits nothing.
+  windows:
+    needs: [native, app]
+    uses: ./.github/workflows/windows.yml
+
   # Dry run of the image publish: builds both architectures from the release archives and checks /health; pushes nothing.
   docker:
     needs: native
