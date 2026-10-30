@@ -19,7 +19,7 @@ jobs:
       matrix:
         # `bundles` are Tauri's names; TARGETS in scripts/app-assets.mjs lists the same bundles by extension. Change both.
         include:
-          - { target: darwin-arm64, runner: macos-14, bundles: dmg }
+          - { target: darwin-arm64, runner: macos-15, bundles: dmg }
           - { target: darwin-x64, runner: macos-15-intel, bundles: dmg }
           - { target: windows-x64, runner: windows-latest, bundles: "msi,nsis" }
           - { target: linux-x64, runner: ubuntu-24.04, bundles: "appimage,deb,rpm" }
