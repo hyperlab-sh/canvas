@@ -4,6 +4,9 @@
 //! capability and the service's Host check are written for `127.0.0.1` only. Everything else (other ports,
 //! https, file:, other hosts, userinfo tricks) is refused too. `blob:` URLs are allowed only when they were
 //! minted by the service origin: the editor's exports are `<a download href="blob:...">` navigations.
+//!
+//! What the window may not show is not always dropped: a link to another site (`http`, `https`, `mailto`) is
+//! handed to the system's default handler, so clicking it neither navigates the window nor does nothing.
 
 use tauri::Url;
 
@@ -35,6 +38,44 @@ pub fn allowed(url: &Url, port: u16) -> bool {
         "blob" => Url::parse(url.path()).is_ok_and(|inner| inner.scheme() == "http" && allowed(&inner, port)),
         "about" => url.as_str() == "about:blank",
         _ => false,
+    }
+}
+
+/// What a link click, `target="_blank"` or `window.open` leads to.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Link {
+    /// The window shows it (the bundled page, the service origin, its blob URLs).
+    Window,
+    /// The system default browser or mail handler opens it; the window stays where it is.
+    System,
+    /// Nobody opens it: `file:`, `javascript:`, `canvas:` and every other scheme.
+    Refused,
+}
+
+/// Where `url` goes when the service listens on `port`.
+pub fn route(url: &Url, port: u16) -> Link {
+    if allowed(url, port) {
+        Link::Window
+    } else if matches!(url.scheme(), "http" | "https" | "mailto") {
+        Link::System
+    } else {
+        Link::Refused
+    }
+}
+
+/// Applies `route` to a link the window may not show: opens the system-handled ones, logs the refused.
+/// Returns whether the window may show it.
+pub fn dispatch(url: &Url, port: u16, open: impl FnOnce(&str)) -> bool {
+    match route(url, port) {
+        Link::Window => true,
+        Link::System => {
+            open(url.as_str());
+            false
+        }
+        Link::Refused => {
+            eprintln!("canvas-app: refused to navigate to {url}");
+            false
+        }
     }
 }
 
@@ -138,5 +179,67 @@ mod tests {
         assert!(!ok("canvas://open/p/id", 43120));
         assert!(!ok("tauri://evil/", 43120));
         assert!(!ok("about:srcdoc", 43120));
+    }
+
+    fn link(url: &str, port: u16) -> Link {
+        route(&Url::parse(url).expect(url), port)
+    }
+
+    #[test]
+    fn links_within_the_service_origin_stay_in_the_window() {
+        assert_eq!(link("http://127.0.0.1:43120/#/p/a/b", 43120), Link::Window);
+        assert_eq!(link("blob:http://127.0.0.1:43120/abc", 43120), Link::Window);
+        assert_eq!(link("tauri://localhost/", 43120), Link::Window);
+        assert_eq!(link("http://tauri.localhost/", 43120), Link::Window);
+    }
+
+    #[test]
+    fn links_to_other_sites_go_to_the_system() {
+        for url in [
+            "https://console.anthropic.com/settings/keys",
+            "http://example.com/",
+            "https://tauri.localhost.evil.com/",
+            "http://127.0.0.1:8080/",
+            "http://localhost:43120/",
+            "https://127.0.0.1:43120/",
+            "http://127.0.0.1:43120@example.com/",
+            "mailto:me@example.com",
+            "mailto:me@example.com?subject=hi",
+        ] {
+            assert_eq!(link(url, 43120), Link::System, "{url}");
+        }
+    }
+
+    #[test]
+    fn other_schemes_are_never_handed_to_the_system() {
+        for url in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "data:text/html,hi",
+            "canvas://open/p/id",
+            "ftp://example.com/",
+            "tel:+1555",
+            "vscode://file/x",
+            "blob:http://example.com/abc",
+            "blob:null/abc",
+            "about:srcdoc",
+            "tauri://evil/",
+        ] {
+            assert_eq!(link(url, 43120), Link::Refused, "{url}");
+        }
+    }
+
+    #[test]
+    fn dispatch_opens_only_the_system_links() {
+        let run = |url: &str| {
+            let mut opened = Vec::new();
+            let shown = dispatch(&Url::parse(url).unwrap(), 43120, |u| opened.push(u.to_string()));
+            (shown, opened)
+        };
+        assert_eq!(run("http://127.0.0.1:43120/x"), (true, vec![]));
+        assert_eq!(run("https://example.com/a?b=1"), (false, vec!["https://example.com/a?b=1".to_string()]));
+        assert_eq!(run("mailto:a@b.c"), (false, vec!["mailto:a@b.c".to_string()]));
+        assert_eq!(run("file:///etc/passwd"), (false, vec![]));
+        assert_eq!(run("canvas://open/p/id"), (false, vec![]));
     }
 }

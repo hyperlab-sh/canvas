@@ -19,7 +19,7 @@ use std::sync::mpsc::channel;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
-use tauri::webview::DownloadEvent;
+use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{AppHandle, DragDropEvent, Manager, State, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
 
@@ -52,6 +52,14 @@ fn focus(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
+    }
+}
+
+/// Hands a link to another site to the system's default browser or mail handler (no IPC, no capability).
+fn open_external(url: &str) {
+    eprintln!("canvas-app: opening {} outside the app", url.split(['?', '#']).next().unwrap_or_default());
+    if let Err(error) = tauri_plugin_opener::open_url(url, None::<&str>) {
+        eprintln!("canvas-app: cannot open {url}: {error}");
     }
 }
 
@@ -343,12 +351,11 @@ fn run(smoke_mode: bool) {
             let mut window = WebviewWindowBuilder::new(app, WINDOW, start)
                 .title("Canvas")
                 .inner_size(1280.0, 800.0)
-                .on_navigation(move |url| {
-                    let allowed = nav::allowed(url, port);
-                    if !allowed {
-                        eprintln!("canvas-app: refused to navigate to {url}");
-                    }
-                    allowed
+                .on_navigation(move |url| nav::dispatch(url, port, open_external))
+                // `target="_blank"` and `window.open`: never a second window; another site goes to the system.
+                .on_new_window(move |url, _features| {
+                    nav::dispatch(&url, port, open_external);
+                    NewWindowResponse::Deny
                 })
                 .on_download(move |_webview, event| {
                     match event {
