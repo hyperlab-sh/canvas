@@ -32,7 +32,7 @@ the service. Only npm and bun use yours.
 ### macOS
 
 ```sh
-brew install hyperlab-sh/tap/canvas                      # CLI and service
+brew install hyperlab-sh/tap/canvas                      # CLI and service (the app is a separate cask)
 brew install --cask hyperlab-sh/tap/canvas-app           # desktop app (installs the formula too)
 ```
 
@@ -154,8 +154,9 @@ the service stays a separate program, so keep it running with `canvas service in
 window says so and offers *Start service*, which runs `canvas serve` for you.
 
 - **Open from the terminal:** `canvas open [diagram]` opens a diagram in the app when it is installed and in your
-  browser otherwise. `canvas open --app` insists on the app, `canvas open --browser` on the browser, and `--print`
-  writes the http link instead.
+  browser otherwise. `canvas open --app` insists on the app (on its home page when you name no diagram; it exits 1 and
+  prints the install command for your platform when the app is missing), `canvas open --browser` insists on the browser,
+  and `--print` writes the http link instead.
 - **Deep links:** `canvas://open/<project>/<id>` opens that diagram in the app, in a running window or a cold start.
 - **Files:** double-click a `.openflow` or `.mmd` file (all platforms), or a `.openflow.json` file (Linux), to open it in
   the app; on macOS and Windows an `.openflow.json` opens through *Open With*, by dropping it on the window, or with
@@ -272,7 +273,7 @@ also a Claude Code plugin (`.claude-plugin/plugin.json`).
 | Command | What it does |
 |---|---|
 | `canvas serve [--port N] [--config path] [--app dir]` | Run the service and the editor in the foreground. |
-| `canvas open [diagram] [--app\|--browser] [--print]` | Open a diagram in the desktop app when it is installed, in your browser otherwise, starting the service if needed. The app is detected without launching it (the bundle id `sh.hyperlab.canvas` through Spotlight or the Applications folders on macOS, the `canvas://` handler elsewhere). `--app` requires the app and a diagram, and exits 1 if the app is missing or cannot start; only an auto-detected app falls back to the browser when it fails to start (on Windows a failed app start is not detected). The app only reaches the service at `127.0.0.1:43120`, so with another `OPENFLOWKIT_SERVICE_URL` the browser is used and `--app` is an error. `--browser` insists on the browser. `diagram` is a `.openflow.json` file in a project folder, `project/id`, or a diagram id or title; with none the home page opens in the browser. `--print` writes the http link instead. |
+| `canvas open [diagram] [--app\|--browser] [--print]` | Open a diagram in the desktop app when it is installed, in your browser otherwise, starting the service if needed. The app is detected without launching it (the bundle id `sh.hyperlab.canvas` through Spotlight or the Applications folders on macOS, the `canvas://` handler elsewhere). `--app` requires the app, opens it on its home page when no diagram is named, and exits 1 if the app is missing (printing the install command for the platform and the releases page) or cannot start; only an auto-detected app falls back to the browser when it fails to start (on Windows a failed app start is not detected). The app only reaches the service at `127.0.0.1:43120`, so with another `OPENFLOWKIT_SERVICE_URL` the browser is used and `--app` is an error. `--browser` insists on the browser. `diagram` is a `.openflow.json` file in a project folder, `project/id`, or a diagram id or title; with none the home page opens in the browser. `--print` writes the http link instead. |
 | `canvas service <install\|status\|restart\|logs\|uninstall>` | Run it in the background. |
 | `canvas mcp` | The MCP server on stdio, for agents. |
 | `canvas render <file> -o out.svg` | Mermaid, D2, Structurizr or OpenFlow DSL to SVG. |
