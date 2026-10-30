@@ -72,7 +72,7 @@ echo "desktop entry: $desktop"; cat "$desktop"
 sudo update-desktop-database /usr/share/applications
 sample="$work/open.openflow.json"
 cat > "$sample" <<'JSON'
-{"id":"d14-open","name":"d14 xdg-open","nodes":[],"edges":[]}
+{"format":"openflowkit.scene","schemaVersion":1,"id":"d14-open","name":"d14 xdg-open","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","pages":[{"id":"d14-open:page-1","name":"Page 1","diagramKind":"flowchart","layers":[{"id":"default","name":"Default","visible":true,"locked":false}],"nodes":[],"connectors":[],"metadata":{},"extensions":{}}],"metadata":{},"extensions":{}}
 JSON
 # Without a desktop environment xdg-open types files with file(1) (application/json) and starts a browser; saying GNOME makes
 # it use gio, which reads the shared-mime-info glob like a real desktop does.
@@ -105,6 +105,7 @@ wait_for_title "d14 xdg-open"
 cat "$work/app.log"
 grep -q "open.openflow.json" "$work/app.log" || fail "xdg-open did not hand the file to the app"
 pgrep -x canvas-app >/dev/null || fail "the app is not running"
+! grep -q "cannot open" "$work/app.log" || fail "the app could not open the file"
 echo "::endgroup::"
 
 echo "::group::XDND drop"
@@ -114,7 +115,7 @@ eval "$(xdotool getwindowgeometry --shell "$window")"
 echo "app window at $X,$Y ${WIDTH}x$HEIGHT"
 drop="$work/drop.openflow.json"
 cat > "$drop" <<'JSON'
-{"id":"d14-drop","name":"d14 xdnd drop","nodes":[],"edges":[]}
+{"format":"openflowkit.scene","schemaVersion":1,"id":"d14-drop","name":"d14 xdnd drop","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","pages":[{"id":"d14-drop:page-1","name":"Page 1","diagramKind":"flowchart","layers":[{"id":"default","name":"Default","visible":true,"locked":false}],"nodes":[],"connectors":[],"metadata":{},"extensions":{}}],"metadata":{},"extensions":{}}
 JSON
 python3 "$(dirname "$0")/app-xdnd-source.py" "file://$drop" 1500 100 >"$work/source.log" 2>&1 &
 source_pid=$!
@@ -130,6 +131,7 @@ wait "$source_pid" || { cat "$work/source.log"; fail "the drag source failed"; }
 wait_for_title "d14 xdnd drop"
 echo "::endgroup::"
 
+! grep -q "cannot open" "$work/app.log" || { cat "$work/app.log"; fail "the app could not open a file"; }
 ! grep -q "refused to navigate" "$work/app.log" || { cat "$work/app.log"; fail "the window tried to navigate to the dropped file"; }
 pgrep -x canvas-app >/dev/null || fail "the app exited"
 echo "app log:"; cat "$work/app.log"
