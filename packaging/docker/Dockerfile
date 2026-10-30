@@ -1,5 +1,5 @@
 # The canvas service in a container, from the linux release archive.
-#   docker buildx build -f packaging/docker/Dockerfile --build-arg VERSION=0.4.0 --platform linux/amd64,linux/arm64 release
+#   docker buildx build -f packaging/docker/Dockerfile --build-arg VERSION=0.4.1 --platform linux/amd64,linux/arm64 release
 # The build context is the directory holding canvas-<version>-linux-x64.tar.gz and canvas-<version>-linux-arm64.tar.gz.
 FROM debian:stable-slim AS archive
 

@@ -1,6 +1,6 @@
 [package]
 name = "canvas-app"
-version = "0.4.0"
+version = "0.4.1"
 description = "Canvas desktop app: a native window onto the running canvas service"
 edition = "2021"
 # Tauri 2.12 needs Rust 1.90.

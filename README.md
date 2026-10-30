@@ -86,7 +86,7 @@ Both repositories are updated on every release, so `apt upgrade` / `dnf upgrade`
 starts the service: run `canvas service install` ([below](#run-it-in-the-background)).
 
 **One-off packages**, from the [releases page](https://github.com/hyperlab-sh/canvas/releases) (checked against
-`SHA256SUMS`; no repository, so no automatic upgrades). `<v>` is the version, for example `0.4.0`:
+`SHA256SUMS`; no repository, so no automatic upgrades). `<v>` is the version, for example `0.4.1`:
 
 ```sh
 sudo apt install ./canvas_<v>_amd64.deb ./canvas-app-<v>-linux-x64.deb        # arm64: _arm64.deb, linux-arm64
@@ -143,7 +143,7 @@ the app start it.
 | bun | `bun add -g @hyperlab.sh/canvas` | installs with bun, but **runs on Node** (see below) |
 
 The install script puts the program in `~/.local/share/canvas` and links `~/.local/bin/canvas` (override with
-`CANVAS_HOME` and `CANVAS_BIN_DIR`; pick a version with `--version 0.4.0`). Run it again to upgrade, and
+`CANVAS_HOME` and `CANVAS_BIN_DIR`; pick a version with `--version 0.4.1`). Run it again to upgrade, and
 `sh install.sh --uninstall` to remove it. It checks the download against the release's `SHA256SUMS`. `brew upgrade canvas`
 upgrades the Homebrew copy.
 
@@ -185,7 +185,7 @@ npx @hyperlab.sh/canvas serve        # or without installing: bunx @hyperlab.sh/
 Open http://127.0.0.1:43120. The service listens on the loopback address only and refuses requests from other hosts and
 other websites.
 
-`bunx` caches what it resolves for `latest`, so after a release it can keep running the old version. Name the version (`bunx @hyperlab.sh/canvas@0.4.0 serve`) or clear it with `bun pm cache rm`; `npx` does not do this.
+`bunx` caches what it resolves for `latest`, so after a release it can keep running the old version. Name the version (`bunx @hyperlab.sh/canvas@0.4.1 serve`) or clear it with `bun pm cache rm`; `npx` does not do this.
 
 ## Run it in the background
 

@@ -6,8 +6,18 @@ All notable changes are listed here, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.4.1]
+
 ### Changed
-- `canvas open --app` without a diagram opens the desktop app on the editor home (`#/home`; `canvas open` with no diagram does the same when the app is installed, else the browser opens `/#/home`). When the app is missing, `--app` exits 1 and prints the install command for the platform (and the releases page). The app accepts `canvas://home` (and the bare `canvas://`), which shows the editor home (`#/home`) and brings the window to the front, also when it is already running. The not-installed hint also says how to add the apt/dnf/zypper repository or the Scoop bucket. The Homebrew formula's caveats name the `canvas-app` cask.
+- `canvas open --app` without a diagram opens the desktop app on the editor home (`#/home`) instead of refusing. Bare `canvas open` does the same when the app is installed, and opens `/#/home` in the browser otherwise; `--browser` and `--print` are unchanged (`--print` writes `http://127.0.0.1:43120/#/home`).
+- When `--app` is given and the app is missing, `canvas open` exits 1 and prints the install command for the platform (macOS, apt, dnf, zypper, Scoop) with the repository or bucket setup it needs, and the releases page.
+- The app accepts `canvas://home` (and the bare `canvas://`): it shows the editor home and brings the window to the front, also when it is already running. After start-up the app's first screen is the editor home, not an untitled diagram.
+- README recommends `brew trust hyperlab-sh/tap` then `brew install --cask canvas-app` on macOS, with the two full-name installs (formula first, then cask) as the alternative. The Homebrew formula's caveats name the `canvas-app` cask on macOS.
+
+### Fixed
+- Links to other sites in the desktop app (for example "Anthropic Console" in the AI Provider modal) open in the default browser; links within the service stay in the window.
+- The Homebrew cask no longer uses the deprecated `postflight` stanza (`postflight_steps` instead); the quarantine strip is kept.
+- CI builds the macOS app on `macos-15`, as `macos-14` is being retired.
 
 ## [0.4.0]
 
