@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -175,6 +175,24 @@ describe('installHint and linuxManagers', () => {
   });
 });
 
+describe('installHint and the README', () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  it('prints the macOS and Windows commands exactly as the README has them', () => {
+    for (const platform of ['darwin', 'win32']) {
+      const commands = installHint(platform).split('\n').filter((line) => /^ {2}\S/.test(line)).map((line) => line.trim());
+      assert.ok(commands.length > 0);
+      for (const command of commands) assert.ok(readme.includes(command), `${command} is not in README.md`);
+    }
+  });
+  it('prints, for each Linux manager, an install line ending in canvas-app that the README also uses', () => {
+    for (const manager of ['apt', 'dnf', 'zypper']) {
+      const command = installHint('linux', [manager]).split('\n').map((line) => line.trim()).find((line) => line.startsWith(`sudo ${manager} install`));
+      assert.ok(command?.endsWith('canvas-app'), command);
+      assert.ok(readme.includes(`sudo ${manager} install`), `README has no ${manager} install line`);
+    }
+  });
+});
+
 describe('runOpen', () => {
   it('opens the browser on the editor home without touching the project list', async () => {
     const h = harness();
@@ -331,6 +349,14 @@ describe('runOpen', () => {
     const h = harness({ env: { OPENFLOWKIT_SERVICE_URL: 'http://127.0.0.1:43999' }, detectApp: () => true });
     assert.equal(await h.run(['notes/flow', '--app']), 1);
     assert.match(h.lines.err.join('\n'), /only reaches the service at 127\.0\.0\.1:43120[\s\S]*--browser/);
+    assert.deepEqual(h.calls.opened, []);
+  });
+  it('--app without a diagram and a service at another URL is the reachability error, not the install hint', async () => {
+    const h = harness({ env: { OPENFLOWKIT_SERVICE_URL: 'http://127.0.0.1:43999' }, detectApp: () => false });
+    assert.equal(await h.run(['--app']), 1);
+    const text = h.lines.err.join('\n');
+    assert.match(text, /only reaches the service at 127\.0\.0\.1:43120/);
+    assert.ok(!text.includes('not installed'), text);
     assert.deepEqual(h.calls.opened, []);
   });
   it('--app opens the app when it is installed', async () => {
