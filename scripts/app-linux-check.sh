@@ -176,8 +176,8 @@ echo "::endgroup::"
 echo "::group::canvas://home"
 before="$(wc -l < "$work/app.log")"
 PATH="$work/shim:$PATH" timeout 30 xdg-open canvas://home
-for _ in $(seq 1 60); do tail -n +"$((before + 1))" "$work/app.log" | grep -qxF "canvas-app: showing http://127.0.0.1:43120/" && break; sleep 1; done
-tail -n +"$((before + 1))" "$work/app.log" | grep -qxF "canvas-app: showing http://127.0.0.1:43120/" || { echo "--- app.log"; cat "$work/app.log"; fail "canvas://home did not take the running app to the editor home"; }
+for _ in $(seq 1 60); do tail -n +"$((before + 1))" "$work/app.log" | grep -qxF "canvas-app: showing http://127.0.0.1:43120/#/home" && break; sleep 1; done
+tail -n +"$((before + 1))" "$work/app.log" | grep -qxF "canvas-app: showing http://127.0.0.1:43120/#/home" || { echo "--- app.log"; cat "$work/app.log"; fail "canvas://home did not take the running app to the editor home"; }
 echo "::endgroup::"
 
 ! grep -q "cannot open" "$work/app.log" || { cat "$work/app.log"; fail "the app could not open a file"; }

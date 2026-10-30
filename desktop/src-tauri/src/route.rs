@@ -1,7 +1,7 @@
 //! The routing decisions behind the window: where it starts, what a deep link does, what "open the
 //! service" navigates to. Pure, so the branches AC-2 depends on are unit-tested; `main.rs` only applies them.
 
-use crate::deeplink::{editor_url, OpenTarget};
+use crate::deeplink::{editor_url, home_url, OpenTarget};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Start {
@@ -18,7 +18,7 @@ pub fn start_target(smoke: bool, service_up: bool, cold_link: Option<&OpenTarget
     }
     let link = cold_link.map(|target| editor_url(origin, target));
     if service_up {
-        (Start::External(link.unwrap_or_else(|| format!("{origin}/"))), None)
+        (Start::External(link.unwrap_or_else(|| home_url(origin))), None)
     } else {
         (Start::Bundled, link)
     }
@@ -66,9 +66,9 @@ pub fn may_hand_over(on_bundled: bool) -> bool {
     on_bundled
 }
 
-/// What `open_service` navigates to: the held link, else the origin. The link stays held until that works.
+/// What `open_service` navigates to: the held link, else the editor home. The link stays held until that works.
 pub fn open_url(pending: Option<&str>, origin: &str) -> String {
-    pending.map_or_else(|| origin.to_string(), str::to_string)
+    pending.map_or_else(|| home_url(origin), str::to_string)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -112,8 +112,8 @@ mod tests {
     }
 
     #[test]
-    fn service_up_without_a_link_opens_the_origin() {
-        assert_eq!(start_target(false, true, None, ORIGIN), (Start::External(format!("{ORIGIN}/")), None));
+    fn service_up_without_a_link_opens_the_editor_home() {
+        assert_eq!(start_target(false, true, None, ORIGIN), (Start::External(format!("{ORIGIN}/#/home")), None));
     }
 
     #[test]
@@ -156,9 +156,9 @@ mod tests {
     }
 
     #[test]
-    fn open_prefers_the_held_link_and_falls_back_to_the_origin() {
+    fn open_prefers_the_held_link_and_falls_back_to_the_editor_home() {
         assert_eq!(open_url(Some("http://127.0.0.1:43120/#/p/a/b"), ORIGIN), "http://127.0.0.1:43120/#/p/a/b");
-        assert_eq!(open_url(None, ORIGIN), ORIGIN);
+        assert_eq!(open_url(None, ORIGIN), format!("{ORIGIN}/#/home"));
     }
 
     #[test]
@@ -172,8 +172,8 @@ mod tests {
     #[test]
     fn the_home_link_routes_like_any_other_link() {
         let url = crate::deeplink::link_url(ORIGIN, &crate::deeplink::Link::Home);
-        assert_eq!(after_link(true, false, url.clone()), LinkAction::Navigate(format!("{ORIGIN}/")));
-        assert_eq!(after_link(false, true, url.clone()), LinkAction::HoldOnly(format!("{ORIGIN}/")));
-        assert_eq!(after_link(false, false, url), LinkAction::HoldAndShowBundled(format!("{ORIGIN}/")));
+        assert_eq!(after_link(true, false, url.clone()), LinkAction::Navigate(format!("{ORIGIN}/#/home")));
+        assert_eq!(after_link(false, true, url.clone()), LinkAction::HoldOnly(format!("{ORIGIN}/#/home")));
+        assert_eq!(after_link(false, false, url), LinkAction::HoldAndShowBundled(format!("{ORIGIN}/#/home")));
     }
 }

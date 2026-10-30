@@ -176,10 +176,10 @@ describe('installHint and linuxManagers', () => {
 });
 
 describe('runOpen', () => {
-  it('opens the home page without touching the project list', async () => {
+  it('opens the browser on the editor home without touching the project list', async () => {
     const h = harness();
     assert.equal(await h.run([]), 0);
-    assert.deepEqual(h.calls.opened, [['open', `${BASE}/`]]);
+    assert.deepEqual(h.calls.opened, [['open', `${BASE}/#/home`]]);
     assert.deepEqual(h.calls.fetch, [`${BASE}/health`]);
   });
   it('opens a diagram by project/id', async () => {
@@ -200,7 +200,7 @@ describe('runOpen', () => {
     assert.deepEqual(h.lines.out, [`${BASE}/#/p/notes/flow`]);
     const bare = harness();
     assert.equal(await bare.run(['--print']), 0);
-    assert.deepEqual(bare.lines.out, [`${BASE}/`]);
+    assert.deepEqual(bare.lines.out, [`${BASE}/#/home`]);
     assert.deepEqual(bare.calls.fetch, []);
   });
   it('starts the service when nothing answers, with the port from the URL', async () => {
@@ -241,14 +241,31 @@ describe('runOpen', () => {
     assert.deepEqual(h.calls.opened, [['open', 'canvas://open/notes/flow']]);
     assert.deepEqual(h.lines.out, ['canvas://open/notes/flow']);
   });
-  it('opens the http home page without probing when there is no diagram', async () => {
-    let probed = false;
-    const h = harness({ detectApp: () => { probed = true; return true; } });
+  it('with no diagram and no flag opens the app on its home when it is installed', async () => {
+    const h = harness({ detectApp: () => true });
     h.setUp(false);
     assert.equal(await h.run([]), 0);
-    assert.deepEqual(h.calls.opened, [['open', `${BASE}/`]]);
+    assert.deepEqual(h.calls.opened, [['open', 'canvas://home']]);
     assert.equal(h.calls.started.length, 1);
+  });
+  it('with no diagram and no flag opens the browser on /#/home when the app is missing', async () => {
+    const h = harness({ detectApp: () => false });
+    h.setUp(false);
+    assert.equal(await h.run([]), 0);
+    assert.deepEqual(h.calls.opened, [['open', `${BASE}/#/home`]]);
+    assert.equal(h.calls.started.length, 1);
+  });
+  it('with no diagram, --browser does not probe for the app', async () => {
+    let probed = false;
+    const h = harness({ detectApp: () => { probed = true; return true; } });
+    assert.equal(await h.run(['--browser']), 0);
+    assert.deepEqual(h.calls.opened, [['open', `${BASE}/#/home`]]);
     assert.equal(probed, false);
+  });
+  it('with no diagram, an app that fails to start falls back to the browser home', async () => {
+    const h = harness({ detectApp: () => true, opener: async (command, args) => { h.calls.opened.push([command, ...args]); return args[0] !== 'canvas://home'; } });
+    assert.equal(await h.run([]), 0);
+    assert.deepEqual(h.calls.opened, [['open', 'canvas://home'], ['open', `${BASE}/#/home`]]);
   });
   it('--app without a diagram opens the app on its home page', async () => {
     const h = harness({ detectApp: () => true });

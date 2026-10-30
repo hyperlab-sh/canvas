@@ -205,10 +205,10 @@ async fn open_service(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
                 }
                 resolved.unwrap_or_else(|error| {
                     eprintln!("canvas-app: cannot open {}: {error}", retry.display());
-                    home
+                    deeplink::home_url(&home)
                 })
             }
-            (None, None) => home,
+            (None, None) => deeplink::home_url(&home),
         };
         if let Err(error) = navigate(&app, &url) {
             // Keep what was held for the next attempt.
