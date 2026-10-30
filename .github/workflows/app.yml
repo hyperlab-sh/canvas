@@ -78,6 +78,7 @@ jobs:
       # Windows each installer in turn (NSIS, then MSI), silently installed, then run from where it installed.
       - name: Smoke (macOS, Windows)
         if: runner.os != 'Linux'
+        timeout-minutes: 15
         shell: bash
         run: |
           target="${{ matrix.target }}"
@@ -99,16 +100,14 @@ jobs:
               fi
             }
             where() { find "$LOCALAPPDATA" "/c/Program Files" "/c/Program Files (x86)" -maxdepth 3 -iname canvas-app.exe 2>/dev/null; }
-            # The NSIS installer first; its copy is removed (the uninstaller runs in place with _?=) so that what the MSI
-            # installs is the only canvas-app.exe on the machine.
             install "canvas-app-$app_version-$target-setup.exe" exe
             nsis="$(where)"; echo "nsis installed: $nsis"
             [ -n "$nsis" ] || { echo "the NSIS installer left no canvas-app.exe" >&2; exit 1; }
             apps+=("setup:$nsis")
-            "$(dirname "$nsis")/uninstall.exe" /S "_?=$(cygpath -w "$(dirname "$nsis")")"
             install "canvas-app-$app_version-$target.msi" msi || { tail -40 "$RUNNER_TEMP/msi.log"; exit 1; }
-            msi="$(where)"; echo "msi installed: $msi"
-            [ -n "$msi" ] || { tail -60 "$RUNNER_TEMP/msi.log"; echo "the MSI left no canvas-app.exe" >&2; exit 1; }
+            # Whatever the MSI added beside the NSIS copy.
+            msi="$(where | grep -vxF "$nsis" | head -n 1)"; echo "msi installed: $msi"
+            [ -n "$msi" ] || { tail -60 "$RUNNER_TEMP/msi.log"; where; echo "the MSI left no canvas-app.exe" >&2; exit 1; }
             apps+=("msi:$msi")
           else
             tar -xzf "release/canvas-$version-$target.tar.gz" -C cli
