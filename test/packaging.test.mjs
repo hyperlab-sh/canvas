@@ -44,3 +44,28 @@ test('the native launcher answers --version with the package version, and only t
   assert.equal(versionOutput(['render', '--version'], '0.4.0'), null);
   assert.equal(versionOutput([], '0.4.0'), null);
 });
+
+test('nix/release.json is rendered from SHA256SUMS in Nix hash format', async () => {
+  const { renderNixRelease, SYSTEMS } = await import('../scripts/render-nix-release.mjs');
+  const hex = (n) => n.toString(16).repeat(64).slice(0, 64);
+  const sums = Object.values(SYSTEMS).map((t, i) => `${hex(i + 1)}  canvas-1.2.3-${t}.tar.gz`).concat([`${hex(9)}  canvas-1.2.3-windows-x64.zip`]).join('\n');
+  const out = JSON.parse(renderNixRelease('1.2.3', `${sums}\n`));
+  assert.equal(out.version, '1.2.3');
+  assert.deepEqual(Object.keys(out.hashes), ['x86_64-linux', 'aarch64-linux', 'x86_64-darwin', 'aarch64-darwin']);
+  assert.equal(out.hashes['x86_64-linux'], `sha256-${Buffer.from(hex(1), 'hex').toString('base64')}`);
+  assert.equal(out.hashes['aarch64-darwin'], `sha256-${Buffer.from(hex(4), 'hex').toString('base64')}`);
+});
+
+test('a SHA256SUMS missing an archive, or from another version, is refused', async () => {
+  const { renderNixRelease } = await import('../scripts/render-nix-release.mjs');
+  const line = `${'a'.repeat(64)}  canvas-1.2.3-linux-x64.tar.gz`;
+  assert.throws(() => renderNixRelease('1.2.3', line), /canvas-1\.2\.3-linux-arm64\.tar\.gz is not in SHA256SUMS/);
+  assert.throws(() => renderNixRelease('9.9.9', line), /canvas-9\.9\.9-linux-x64\.tar\.gz is not in SHA256SUMS/);
+});
+
+test('the committed nix/release.json is what the generator would print for its own hashes', async () => {
+  const { renderNixRelease, SYSTEMS } = await import('../scripts/render-nix-release.mjs');
+  const committed = JSON.parse(readFileSync(new URL('../nix/release.json', import.meta.url), 'utf8'));
+  const sums = Object.entries(SYSTEMS).map(([system, t]) => `${Buffer.from(committed.hashes[system].slice(7), 'base64').toString('hex')}  canvas-${committed.version}-${t}.tar.gz`).join('\n');
+  assert.equal(renderNixRelease(committed.version, sums), readFileSync(new URL('../nix/release.json', import.meta.url), 'utf8'));
+});
