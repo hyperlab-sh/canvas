@@ -127,6 +127,8 @@ jobs:
           sha256sum -c SHA256SUMS
 
   # Pushes the checked trees to gh-pages (served at https://hyperlab-sh.github.io/canvas/). Prior versions stay in the pools.
+  # The concurrency group keeps one publish at a time, but GitHub cancels a pending run when a third arrives: a cancelled
+  # repos-publish is recovered by re-running that job (it sees gh-pages moved and rebuilds the trees on it).
   repos-publish:
     needs: [repos, github-release]
     if: startsWith(github.ref, 'refs/tags/') && !inputs.dry_run

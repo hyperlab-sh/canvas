@@ -23,8 +23,6 @@ if git diff --cached --quiet; then
   echo "repositories unchanged"
   exit 0
 fi
-git -c user.name="${GIT_AUTHOR_NAME:-canvas release}" -c user.email="${GIT_AUTHOR_EMAIL:-actions@users.noreply.github.com}" \
-  checkout --orphan pages-new
-git -c user.name="${GIT_AUTHOR_NAME:-canvas release}" -c user.email="${GIT_AUTHOR_EMAIL:-actions@users.noreply.github.com}" \
-  commit -q -m "$PUBLISH_MESSAGE"
+git checkout --orphan pages-new
+git -c user.name='canvas release' -c user.email=actions@users.noreply.github.com commit -q -m "$PUBLISH_MESSAGE"
 git push --force-with-lease="gh-pages:$base" origin HEAD:gh-pages
