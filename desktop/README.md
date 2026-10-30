@@ -14,7 +14,7 @@ it shows `http://127.0.0.1:<port>`, where `canvas serve` (or `canvas service ins
   `~/.config/openflowkit/service.json`), else `43120`. A port given only to `canvas service install --port N`
   lives in the launchd/systemd unit, not in either source: set `port` in the service config for the app to
   find it.
-- **Links:** `canvas://open/<project>/<id>` shows that diagram, on a cold start and in the running window
+- **Links:** `canvas://home` (or the bare `canvas://`) shows the editor home and brings the window to the front; `canvas://open/<project>/<id>` shows that diagram, on a cold start and in the running window
   (one instance). The window only ever navigates to the bundled page and to `http://127.0.0.1:<port>`;
   `localhost`, other ports, other hosts and `file:` are refused. (`blob:` URLs minted by the service page are
   allowed, because that is how exports download.)

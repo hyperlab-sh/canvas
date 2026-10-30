@@ -62,11 +62,11 @@ fn navigate(app: &AppHandle, url: &str) -> Result<(), String> {
     main_window(app).ok_or("the window is gone")?.navigate(url).map_err(|error| error.to_string())
 }
 
-/// Shows `link` (a `canvas://open/<project>/<id>` URL) in the window. When the service is not answering the
+/// Shows `link` (a `canvas://open/<project>/<id>` or `canvas://home` URL) in the window and brings it to the front. When the service is not answering the
 /// link is held and the bundled page is shown, which polls and hands over once the service is up.
 /// The probe blocks, so it runs off the main thread; navigation goes back through it.
 fn handle_deep_link(app: &AppHandle, link: &str) {
-    let Some(target) = deeplink::parse(link) else {
+    let Some(parsed) = deeplink::parse_link(link) else {
         eprintln!("canvas-app: ignoring link {link:?}");
         return;
     };
@@ -74,7 +74,7 @@ fn handle_deep_link(app: &AppHandle, link: &str) {
     let app = app.clone();
     std::thread::spawn(move || {
         let state = app.state::<AppState>();
-        let url = deeplink::editor_url(&origin(&state), &target);
+        let url = deeplink::link_url(&origin(&state), &parsed);
         let up = service::probe(state.port);
         let on_main = app.clone();
         let _ = app.run_on_main_thread(move || {

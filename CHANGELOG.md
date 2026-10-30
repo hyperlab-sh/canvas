@@ -7,7 +7,7 @@ All notable changes are listed here, newest first. The format follows
 ## [Unreleased]
 
 ### Changed
-- `canvas open --app` without a diagram opens the desktop app on its home page. When the app is missing, `--app` exits 1 and prints the install command for the platform (and the releases page). The Homebrew formula's caveats name the `canvas-app` cask.
+- `canvas open --app` without a diagram opens the desktop app on its home page. When the app is missing, `--app` exits 1 and prints the install command for the platform (and the releases page). The app accepts `canvas://home` (and the bare `canvas://`), which shows the editor home and brings the window to the front, also when it is already running. The not-installed hint also says how to add the apt/dnf/zypper repository or the Scoop bucket. The Homebrew formula's caveats name the `canvas-app` cask.
 
 ## [0.4.0]
 
