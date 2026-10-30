@@ -121,6 +121,9 @@ jobs:
           # Without the postflight: the app must come out quarantined, or the check below proves nothing.
           awk '/^  postflight do$/ { skip = 1 } !skip { print } skip && /^  end$/ { skip = 0 }' "$RUNNER_TEMP/canvas-app.rb" > "$tap/Casks/canvas-app.rb"
           if grep -q postflight "$tap/Casks/canvas-app.rb"; then echo "the postflight was not removed from the control cask" >&2; exit 1; fi
+          # The documented order: the formula by full name, then the cask. Homebrew trusts only the item named, so a
+          # cask-only install of a fresh tap refuses the cask's formula dependency.
+          brew install hyperlab-sh/tap/canvas
           brew install --cask hyperlab-sh/tap/canvas-app 2>&1 | tee "$RUNNER_TEMP/install-control.log"
           dmg="$(brew --cache --cask hyperlab-sh/tap/canvas-app)"
           xattr -p com.apple.quarantine "$dmg" || { echo "Homebrew did not quarantine the downloaded dmg: $dmg" >&2; exit 1; }
