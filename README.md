@@ -21,8 +21,8 @@ and serves the editor, and an MCP server agents draw through.
 ## Install
 
 Two things ship: **`canvas`**, the CLI and background service (with the MCP server), and **`canvas-app`**, a desktop
-window onto that service ([below](#desktop-app)). The app does not contain the service: install `canvas` too, except
-with Homebrew, Scoop, winget and the `.deb`/`.rpm`, which pull it in. Every channel below is built by the release workflow and
+window onto that service ([below](#desktop-app)). The app does not contain the service: install `canvas` too (on Homebrew,
+the formula first, see macOS), except with Scoop, winget and the `.deb`/`.rpm`, which pull it in. Every channel below is built by the release workflow and
 installs the same version.
 
 The standalone channels (Homebrew, the apt/dnf repositories, `.deb`/`.rpm`, install scripts, Scoop, winget, Nix,

@@ -3,8 +3,9 @@
 #   scripts/app-linux-check.sh <app assets dir> <canvas packages dir> <app version> <cli version> [--files]
 # SMOKE_OUT (default: a temp dir) receives the smoke JSON.
 # Always: the .deb and .rpm dependency lines, the install, and `canvas-app --smoke` against the installed canvas.
-# With --files (D14): `xdg-open` of a .openflow.json starts the app on it, and an XDND drop of another file opens it,
-# and neither makes the window navigate to file:// (the app refuses and logs that; the log must not show it).
+# With --files (D14, D18): `xdg-open` of a .openflow.json starts the app on it, and an XDND drop of another file opens it,
+# and neither makes the window navigate to file:// (the app refuses and logs that; the log must not show it); then
+# `xdg-open canvas://home` takes the running app from that diagram to the editor home.
 set -euo pipefail
 
 assets="$(cd "$1" && pwd)"
@@ -168,6 +169,15 @@ wait "$source_pid" || { cat "$work/source.log"; fail "the drag source failed or 
 ! grep -q drag-failed "$work/source.log" || { cat "$work/source.log"; fail "the drag was cancelled or not accepted"; }
 wait_for_title "d14 xdnd drop"
 wait_for_window_on "d14 xdnd drop"
+echo "::endgroup::"
+
+# D18: canvas://home brings the running app, now on a diagram, back to the editor home. The scheme handler is the desktop
+# entry's x-scheme-handler/canvas; the running instance gets the link and logs the route it shows.
+echo "::group::canvas://home"
+before="$(wc -l < "$work/app.log")"
+PATH="$work/shim:$PATH" timeout 30 xdg-open canvas://home
+for _ in $(seq 1 60); do tail -n +"$((before + 1))" "$work/app.log" | grep -qxF "canvas-app: showing http://127.0.0.1:43120/" && break; sleep 1; done
+tail -n +"$((before + 1))" "$work/app.log" | grep -qxF "canvas-app: showing http://127.0.0.1:43120/" || { echo "--- app.log"; cat "$work/app.log"; fail "canvas://home did not take the running app to the editor home"; }
 echo "::endgroup::"
 
 ! grep -q "cannot open" "$work/app.log" || { cat "$work/app.log"; fail "the app could not open a file"; }
