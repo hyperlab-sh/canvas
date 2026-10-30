@@ -94,6 +94,12 @@ jobs:
     needs: native
     uses: ./.github/workflows/packages.yml
 
+  # Dry run of the app release: builds the bundles on macOS, Windows and Linux (x64, arm64), smoke-tests each against that
+  # runner's canvas, checks the C-6 names and SHA256SUMS, and under xvfb opens files in the installed .deb (D14); publishes nothing.
+  app:
+    needs: [native, packages]
+    uses: ./.github/workflows/app.yml
+
   # Dry run of the image publish: builds both architectures from the release archives and checks /health; pushes nothing.
   docker:
     needs: native

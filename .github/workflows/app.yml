@@ -1,0 +1,179 @@
+name: Desktop app
+
+# Builds the canvas-app bundles on GitHub-hosted runners, smoke-tests each against a `canvas serve` from that runner's CLI build,
+# and collects the bundles with their checksums in the "app" artifact. Called by ci.yml (every PR) and release.yml; it never
+# publishes, the release workflow attaches the "app" artifact. Needs the caller's "release" and "packages" artifacts.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: darwin-arm64, runner: macos-14, bundles: dmg }
+          - { target: darwin-x64, runner: macos-15-intel, bundles: dmg }
+          - { target: windows-x64, runner: windows-latest, bundles: "msi,nsis" }
+          - { target: linux-x64, runner: ubuntu-24.04, bundles: "appimage,deb,rpm" }
+          - { target: linux-arm64, runner: ubuntu-24.04-arm, bundles: "appimage,deb,rpm" }
+    env:
+      # linuxdeploy cannot use FUSE on the runners, and the system strip rejects the .relr.dyn sections it bundles.
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+      NO_STRIP: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: The tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          [ "v$(node scripts/app-assets.mjs version)" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME does not match desktop/src-tauri/Cargo.toml" >&2; exit 1; }
+
+      - name: Linux build packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf rpm \
+            xvfb x11-utils xdotool dbus-x11 python3-gi gir1.2-gtk-3.0 shared-mime-info desktop-file-utils xdg-utils jq
+
+      # desktop/rust-toolchain.toml pins the compiler; rustup installs it on the first cargo run inside desktop/.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: Build the bundles
+        shell: bash
+        env:
+          BUNDLES: ${{ matrix.bundles }}
+          CI: "true"
+        run: |
+          # The .deb and .rpm depend on the canvas package of the CLI version built alongside.
+          node scripts/app-assets.mjs config > "$RUNNER_TEMP/tauri-depends.json"
+          cd desktop
+          npx --yes @tauri-apps/cli@2.12.4 build --ci --bundles "$BUNDLES" --config "$RUNNER_TEMP/tauri-depends.json"
+
+      - name: Name the bundles
+        shell: bash
+        run: node scripts/app-assets.mjs collect desktop/src-tauri/target/release/bundle "${{ matrix.target }}" app-bundles
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release
+
+      # The service is the CLI built for this runner's target (the archive from the binaries job), not the one from the
+      # app's own build; the app is the built one, not a cargo run.
+      - name: Smoke (macOS, Windows)
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          target="${{ matrix.target }}"
+          version="$(node -p "require('./package.json').version")"
+          mkdir cli
+          if [ "$RUNNER_OS" = Windows ]; then
+            tar -xf "release/canvas-$version-$target.zip" -C cli
+            canvas="$PWD/cli/bin/canvas.exe"
+            app="$PWD/desktop/src-tauri/target/release/canvas-app.exe"
+          else
+            tar -xzf "release/canvas-$version-$target.tar.gz" -C cli
+            canvas="$PWD/cli/bin/canvas"
+            app="$PWD/desktop/src-tauri/target/release/bundle/macos/Canvas.app/Contents/MacOS/canvas-app"
+          fi
+          "$canvas" --version
+          "$app" --version
+          OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$canvas" serve --port 43120 &
+          curl -fsS --retry 30 --retry-connrefused --retry-delay 1 -o /dev/null http://127.0.0.1:43120/health
+          mkdir -p smoke
+          OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$app" --smoke | tee "smoke/smoke-$target.json"
+          node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8").trim().split("\n").pop()); if (!r.ok || !r.mounted) { console.error("the editor did not mount"); process.exit(1); }' "smoke/smoke-$target.json"
+
+      # D14: the built .deb installed with the canvas .deb, smoke under xvfb on both architectures; the file checks on x64.
+      - uses: actions/download-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: packages
+          path: packages
+
+      - name: Install the .deb, smoke, and open files (Linux)
+        if: runner.os == 'Linux'
+        env:
+          SMOKE_OUT: ${{ github.workspace }}/smoke
+        run: |
+          mkdir -p smoke
+          version="$(node scripts/app-assets.mjs version)"
+          cli_version="$(node -p "require('./package.json').version")"
+          flag=
+          [ "${{ matrix.target }}" = linux-x64 ] && flag=--files
+          scripts/app-linux-check.sh app-bundles packages "$version" "$cli_version" $flag
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.target }}
+          path: app-bundles/*
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-smoke-${{ matrix.target }}
+          path: smoke/*
+          if-no-files-found: error
+
+  # Every bundle, named per C-6, with one SHA256SUMS over the CLI archives, the distro packages and the app bundles.
+  assets:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The packages artifact's SHA256SUMS already lists the archives and the distro packages.
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: all
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: all
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: app-{darwin,windows,linux}-*
+          path: all
+          merge-multiple: true
+
+      - name: Every app bundle is there, with the C-6 names
+        run: node scripts/app-assets.mjs check all
+
+      - name: Checksum the app bundles
+        run: |
+          node scripts/app-assets.mjs sums all all/SHA256SUMS
+          cat all/SHA256SUMS
+
+      - name: sha256sum -c passes over every asset
+        run: cd all && sha256sum -c SHA256SUMS
+
+      # The release job attaches these on top of the "release" and "packages" artifacts.
+      - run: |
+          mkdir app-out
+          cp all/canvas-app-* all/SHA256SUMS app-out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: app-out/*
+          if-no-files-found: error
