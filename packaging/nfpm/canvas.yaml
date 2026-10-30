@@ -1,5 +1,5 @@
 # nfpm config for the `canvas` CLI/service package, rendered by build.mjs (which sets the environment variables).
-#   CANVAS_VERSION  package version, e.g. 0.4.0
+#   CANVAS_VERSION  package version, e.g. 0.4.1
 #   CANVAS_ARCH     amd64 | arm64 (nfpm maps it to x86_64 | aarch64 for rpm)
 #   CANVAS_RELEASE  rpm release ("1"); empty for deb, which has no revision in its name
 # ${CANVAS_STAGE} (the extracted release archive: bin/, share/, LICENSE, NOTICE, README.md) is substituted by build.mjs itself.
