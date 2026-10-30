@@ -137,7 +137,8 @@ jobs:
           if grep -q "postflight.*deprecated" "$RUNNER_TEMP/install.log"; then
             echo "::warning::Homebrew deprecates the cask postflight; A5 relies on it (no xattr step in postflight_steps). Users can run: xattr -dr com.apple.quarantine /Applications/Canvas.app"
           fi
-          brew list --formula canvas
+          # The formula was installed first (above), so `brew list` would pass without the dependency; read it from the cask.
+          brew info --cask --json=v2 hyperlab-sh/tap/canvas-app | jq -e '.casks[0].depends_on.formula | index("hyperlab-sh/tap/canvas")'
 
           test -d "$app"
           xattr -r "$app" || true
