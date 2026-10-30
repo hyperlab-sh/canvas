@@ -10,6 +10,7 @@ It packages a build of the [hyperlab-sh/openflowkit](https://github.com/hyperlab
 and serves the editor, and an MCP server agents draw through.
 
 - [Install](#install)
+- [Desktop app](#desktop-app)
 - [Quick start](#quick-start)
 - [Run it in the background](#run-it-in-the-background)
 - [Projects and configuration](#projects-and-configuration)
@@ -19,28 +20,149 @@ and serves the editor, and an MCP server agents draw through.
 
 ## Install
 
-Pick one. The first three are a standalone binary that carries its own runtime: no Node or bun needed, and nothing
-else on your machine decides which runtime runs the service.
+Two things ship: **`canvas`**, the CLI and background service (with the MCP server), and **`canvas-app`**, a desktop
+window onto that service ([below](#desktop-app)). The app does not contain the service: install `canvas` too, except
+with Homebrew, Scoop and the `.deb`/`.rpm`, which pull it in. Every channel below is built by the release workflow and
+installs the same version.
 
-| | Command | Platforms |
+The standalone channels (Homebrew, the apt/dnf repositories, `.deb`/`.rpm`, install scripts, Scoop, winget, Nix,
+Docker) carry their own runtime: no Node or bun needed, and nothing else on your machine decides which runtime runs
+the service. Only npm and bun use yours.
+
+### macOS
+
+```sh
+brew install hyperlab-sh/tap/canvas                      # CLI and service
+brew install --cask hyperlab-sh/tap/canvas-app           # desktop app (installs the formula too)
+```
+
+Or download `canvas-app-<version>-darwin-arm64.dmg` (Apple silicon) or `-darwin-x64.dmg` (Intel) from the
+[releases page](https://github.com/hyperlab-sh/canvas/releases) and drag Canvas to Applications.
+
+**The app is not signed or notarized** (there is no Apple Developer account behind this project). The cask removes the
+quarantine flag for you. A `.dmg` you download yourself is quarantined, and Gatekeeper says Canvas "cannot be
+opened" or "is damaged". Either right-click Canvas in Applications and choose Open (then Open again), or run:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Canvas.app
+```
+
+### Linux
+
+**Debian, Ubuntu** (apt; x86_64 and arm64). The repository is signed; the key is pinned to it with `signed-by`:
+
+```sh
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://hyperlab-sh.github.io/canvas/canvas-archive-keyring.gpg | sudo tee /etc/apt/keyrings/canvas-archive-keyring.gpg >/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/canvas-archive-keyring.gpg] https://hyperlab-sh.github.io/canvas/apt stable main" | sudo tee /etc/apt/sources.list.d/canvas.list
+sudo apt update
+sudo apt install canvas canvas-app          # canvas-app is optional
+```
+
+**Fedora, RHEL and clones, openSUSE** (dnf, zypper; x86_64 and aarch64). `canvas.repo` sets `gpgcheck=1`,
+`repo_gpgcheck=1` and the `gpgkey`:
+
+```sh
+# Fedora, RHEL, Rocky, Alma
+sudo curl -fsSL https://hyperlab-sh.github.io/canvas/canvas.repo -o /etc/yum.repos.d/canvas.repo
+sudo dnf install canvas canvas-app          # canvas-app is optional
+
+# openSUSE (zypper does not fetch the key by itself)
+sudo curl -fsSL https://hyperlab-sh.github.io/canvas/canvas.repo -o /etc/zypp/repos.d/canvas.repo
+sudo rpm --import https://hyperlab-sh.github.io/canvas/canvas.asc
+sudo zypper install canvas canvas-app
+```
+
+Both repositories are updated on every release, so `apt upgrade` / `dnf upgrade` keep canvas current. Neither package
+starts the service: run `canvas service install` ([below](#run-it-in-the-background)).
+
+**One-off packages**, from the [releases page](https://github.com/hyperlab-sh/canvas/releases) (checked against
+`SHA256SUMS`; no repository, so no automatic upgrades). `<v>` is the version, for example `0.4.0`:
+
+```sh
+sudo apt install ./canvas_<v>_amd64.deb ./canvas-app-<v>-linux-x64.deb        # arm64: _arm64.deb, linux-arm64
+sudo dnf install ./canvas-<v>-1.x86_64.rpm ./canvas-app-<v>-linux-x64.rpm     # aarch64: .aarch64.rpm, linux-arm64
+```
+
+**AppImage** (the app only, x86_64 and arm64): download `canvas-app-<v>-linux-x64.AppImage` (or `-linux-arm64`),
+`chmod +x` it and run it. It has no dependencies and installs no service, so get `canvas` from another channel. It
+registers no `canvas://` handler or file association; use the `.deb` or `.rpm` for those.
+
+**Homebrew on Linux** installs the CLI and service: `brew install hyperlab-sh/tap/canvas`.
+
+### Windows
+
+```powershell
+scoop bucket add hyperlab https://github.com/hyperlab-sh/homebrew-tap
+scoop install canvas                       # CLI
+scoop install canvas-app                   # desktop app (installs canvas too)
+```
+
+Or install the CLI with the script, which puts it in `%LOCALAPPDATA%\canvas` and on your user `PATH`:
+
+```powershell
+irm https://raw.githubusercontent.com/hyperlab-sh/canvas/main/install.ps1 | iex
+```
+
+Or download the app installer from the [releases page](https://github.com/hyperlab-sh/canvas/releases):
+`canvas-app-<v>-windows-x64.msi` or `canvas-app-<v>-windows-x64-setup.exe`.
+
+**winget** is manual for now: the manifests (`Hyperlab.Canvas` and `Hyperlab.CanvasApp`) are generated on each release
+and submitted to `microsoft/winget-pkgs` by hand, so `winget install Hyperlab.Canvas` works only once Microsoft has merged
+that version. Until it has, use Scoop or the installers.
+
+**Unsigned binaries.** Nothing here is code-signed (no paid certificate). Windows may react in two ways:
+- **SmartScreen** shows "Windows protected your PC" for the installers and `canvas-app.exe`. Choose *More info*, then
+  *Run anyway*. Files fetched by Scoop or `irm` rarely trigger it.
+- **Smart App Control**, when switched on (a fresh Windows 11 install starts in evaluation mode), blocks unsigned
+  programs outright, with no *Run anyway*. Turn it off in *Windows Security > App & browser control > Smart App
+  Control*; it cannot be switched back on without resetting Windows. If you would rather keep it on, run the CLI in WSL or
+  Docker.
+
+`canvas service` (the background service) is available on macOS and Linux only; on Windows run `canvas serve`, or let
+the app start it.
+
+### Other channels
+
+| | Command | Notes |
 |---|---|---|
-| Homebrew | `brew install hyperlab-sh/tap/canvas` | macOS, Linux |
-| Homebrew cask (desktop app) | `brew install --cask hyperlab-sh/tap/canvas-app` | macOS (unsigned: if macOS refuses to open `Canvas.app`, right-click > Open, or run `xattr -dr com.apple.quarantine /Applications/Canvas.app`) |
 | Install script | `curl -fsSL https://raw.githubusercontent.com/hyperlab-sh/canvas/main/install.sh \| sh` | macOS, Linux (x64, arm64; not Alpine/musl) |
-| PowerShell | `irm https://raw.githubusercontent.com/hyperlab-sh/canvas/main/install.ps1 \| iex` | Windows x64 |
-| Scoop | `scoop bucket add hyperlab https://github.com/hyperlab-sh/homebrew-tap` then `scoop install canvas` (or `canvas-app` for the desktop app) | Windows x64 |
+| Nix | `nix run github:hyperlab-sh/canvas -- --version`, or `nix profile install github:hyperlab-sh/canvas` | the CLI, Linux and macOS (x64, arm64) |
+| Docker | `docker run --rm -p 127.0.0.1:43120:43120 -v canvas-data:/data ghcr.io/hyperlab-sh/canvas:latest` | the service on `http://127.0.0.1:43120`, projects in `/data` (amd64, arm64) |
 | npm | `npm i -g @hyperlab.sh/canvas` | needs Node 20.11 or newer |
 | bun | `bun add -g @hyperlab.sh/canvas` | installs with bun, but **runs on Node** (see below) |
 
 The install script puts the program in `~/.local/share/canvas` and links `~/.local/bin/canvas` (override with
-`CANVAS_HOME` and `CANVAS_BIN_DIR`; pick a version with `--version 0.3.0`). Run it again to upgrade, and
+`CANVAS_HOME` and `CANVAS_BIN_DIR`; pick a version with `--version 0.4.0`). Run it again to upgrade, and
 `sh install.sh --uninstall` to remove it. It checks the download against the release's `SHA256SUMS`. `brew upgrade canvas`
 upgrades the Homebrew copy.
+
+The Docker image has no authentication and binds all interfaces inside the container, so publish the port on
+loopback only, as above, unless the network is yours. It runs as uid 10001: use a named volume for
+`/data`, or add `--user "$(id -u):$(id -g)"` when you bind-mount a host directory.
 
 **The npm package runs on Node, whichever tool installed it.** The `canvas` command starts with `#!/usr/bin/env node`,
 and bun, like npm, runs installed commands through that line. If you installed with bun and have no Node, use one of the
 standalone options instead. To run it on bun anyway, use `bun --bun canvas serve`, and for the background service
 `canvas service install --runtime bun`.
+
+## Desktop app
+
+`canvas-app` is a native window (Tauri 2) onto the running service at `http://127.0.0.1:43120`. It is a thin viewer:
+the service stays a separate program, so keep it running with `canvas service install`. With the service down the
+window says so and offers *Start service*, which runs `canvas serve` for you.
+
+- **Open from the terminal:** `canvas open [diagram]` opens a diagram in the app when it is installed and in your
+  browser otherwise. `canvas open --app` insists on the app, `canvas open --browser` on the browser, and `--print`
+  writes the http link instead.
+- **Deep links:** `canvas://open/<project>/<id>` opens that diagram in the app, in a running window or a cold start.
+- **Files:** double-click a `.openflow` or `.mmd` file (all platforms), or a `.openflow.json` file (Linux), to open it in
+  the app; on macOS and Windows an `.openflow.json` opens through *Open With*, by dropping it on the window, or with
+  `canvas open file.openflow.json`, because those systems match only the last extension. A diagram outside your projects
+  is imported into `scratch` as a copy.
+- **Exports** (PNG, SVG, JSON) land in your Downloads folder.
+- `canvas-app --version` and `canvas-app --smoke` (loads the editor, prints one JSON line, exits 0 or 1) are
+  there for scripts. More in [`desktop/README.md`](desktop/README.md).
 
 ## Quick start
 
@@ -52,7 +174,7 @@ npx @hyperlab.sh/canvas serve        # or without installing: bunx @hyperlab.sh/
 Open http://127.0.0.1:43120. The service listens on the loopback address only and refuses requests from other hosts and
 other websites.
 
-`bunx` caches what it resolves for `latest`, so after a release it can keep running the old version. Name the version (`bunx @hyperlab.sh/canvas@0.3.0 serve`) or clear it with `bun pm cache rm`; `npx` does not do this.
+`bunx` caches what it resolves for `latest`, so after a release it can keep running the old version. Name the version (`bunx @hyperlab.sh/canvas@0.4.0 serve`) or clear it with `bun pm cache rm`; `npx` does not do this.
 
 ## Run it in the background
 
@@ -103,8 +225,8 @@ A project is a name mapped to a folder, and a diagram is one `.openflow.json` fi
 {
   "port": 43120,
   "projects": [
-    { "name": "scratch", "path": "/Users/you/.local/share/openflowkit/diagrams" },
-    { "name": "my-app", "path": "/Users/you/code/my-app/diagrams" }
+    { "name": "scratch", "path": "/home/you/.local/share/openflowkit/diagrams" },
+    { "name": "my-app", "path": "/home/you/code/my-app/diagrams" }
   ]
 }
 ```
