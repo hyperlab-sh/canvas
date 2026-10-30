@@ -36,6 +36,10 @@ describe('parseOpenArgs', () => {
     assert.match(parseOpenArgs(['a', 'b']).error, /one diagram/);
     assert.match(parseOpenArgs(['--nope']).error, /unknown argument "--nope"/);
   });
+  it('--print ignores --app and --browser, as the help says', () => {
+    assert.equal(parseOpenArgs(['--app', '--print']).error, undefined);
+    assert.equal(parseOpenArgs(['--app', '--browser', '--print']).error, undefined);
+  });
   it('rejects --app together with --browser', () => assert.match(parseOpenArgs(['--app', '--browser']).error, /cannot be combined/));
 });
 
@@ -100,13 +104,9 @@ describe('appInstalled', () => {
     const run = (command, args) => { seen.push([command, ...args]); return args[1]?.startsWith('/h/') ? { code: 0, stdout: 'sh.hyperlab.canvas\n' } : { code: 0, stdout: '' }; };
     assert.equal(appInstalled('darwin', run, '/h'), true);
     assert.deepEqual(seen.map((call) => call[0] + ' ' + (call[2] ?? '')), ['mdfind ', 'defaults /Applications/Canvas.app/Contents/Info', 'defaults /h/Applications/Canvas.app/Contents/Info']);
+    assert.ok(seen.every(([command]) => command !== 'open'));
     assert.equal(appInstalled('darwin', (command) => ({ code: 0, stdout: command === 'mdfind' ? '' : 'com.other.app\n' }), '/h'), false);
     assert.equal(appInstalled('darwin', answer(1).run, '/h'), false);
-  });
-  it('never uses open -R on macOS', () => {
-    const seen = [];
-    appInstalled('darwin', (command, args) => { seen.push(command); return { code: 1, stdout: '' }; }, '/h');
-    assert.ok(!seen.includes('open'));
   });
   it('wants a non-empty handler from xdg-mime on Linux', () => {
     const a = answer(0, 'canvas-app.desktop\n');
@@ -252,6 +252,19 @@ describe('runOpen', () => {
     const h = harness({ detectApp: () => false });
     assert.equal(await h.run(['notes/flow', '--app']), 1);
     assert.match(h.lines.err.join('\n'), /desktop app is not installed/);
+    assert.deepEqual(h.calls.opened, []);
+  });
+  it('uses the browser without probing when the service is not at the default URL', async () => {
+    let probed = false;
+    const h = harness({ env: { OPENFLOWKIT_SERVICE_URL: 'http://127.0.0.1:43999' }, detectApp: () => { probed = true; return true; } });
+    assert.equal(await h.run(['notes/flow']), 0);
+    assert.deepEqual(h.calls.opened, [['open', 'http://127.0.0.1:43999/#/p/notes/flow']]);
+    assert.equal(probed, false);
+  });
+  it('--app with a service at another URL is an error and opens nothing', async () => {
+    const h = harness({ env: { OPENFLOWKIT_SERVICE_URL: 'http://127.0.0.1:43999' }, detectApp: () => true });
+    assert.equal(await h.run(['notes/flow', '--app']), 1);
+    assert.match(h.lines.err.join('\n'), /only reaches the service at 127\.0\.0\.1:43120[\s\S]*--browser/);
     assert.deepEqual(h.calls.opened, []);
   });
   it('--app opens the app when it is installed', async () => {
