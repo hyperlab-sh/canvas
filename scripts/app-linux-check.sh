@@ -42,7 +42,19 @@ export OPENFLOWKIT_SERVICE_CONFIG="$work/service.json"
 export HOME="$work/home"
 mkdir -p "$HOME"
 pids=()
-cleanup() { pkill -x canvas-app 2>/dev/null || true; for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done; rm -rf "$work"; }
+# The app and its WebKit helpers keep writing under $HOME (the mesa shader cache) until they have exited, so stop them and
+# wait before removing $work. Nothing here may change the exit status: by now the assertions have decided it.
+app_procs='^(canvas-app|WebKit(Web|Network|GPU)Process)$'
+cleanup() {
+  set +e
+  pkill -TERM "$app_procs" 2>/dev/null
+  for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null; done
+  for _ in $(seq 1 50); do pgrep "$app_procs" >/dev/null || break; sleep 0.2; done
+  pkill -KILL "$app_procs" 2>/dev/null
+  for pid in "${pids[@]}"; do wait "$pid" 2>/dev/null; done
+  for _ in 1 2 3 4 5; do rm -rf "$work" 2>/dev/null && break; sleep 1; done
+  return 0
+}
 trap cleanup EXIT
 
 canvas serve --port 43120 >"$work/serve.log" 2>&1 &
