@@ -100,6 +100,12 @@ jobs:
     needs: [native, packages]
     uses: ./.github/workflows/app.yml
 
+  # Dry run of the tap: the formula on Linux (x64, arm64) and macOS, and the canvas-app cask on macOS, installed from a local tap
+  # rendered against the dry-run assets; pushes nothing.
+  brew:
+    needs: [native, app]
+    uses: ./.github/workflows/brew.yml
+
   # Dry run of the image publish: builds both architectures from the release archives and checks /health; pushes nothing.
   docker:
     needs: native
