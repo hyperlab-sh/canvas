@@ -85,11 +85,25 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           app_version="$(node scripts/app-assets.mjs version)"
           mkdir -p cli smoke
-          apps=()
           if [ "$RUNNER_OS" = Windows ]; then
             # bsdtar expands zip files; the tar on PATH in Git Bash is GNU tar, which does not.
             "$SYSTEMROOT/System32/tar.exe" -xf "release/canvas-$version-$target.zip" -C cli
             canvas="$PWD/cli/bin/canvas.exe"
+          else
+            tar -xzf "release/canvas-$version-$target.tar.gz" -C cli
+            canvas="$PWD/cli/bin/canvas"
+          fi
+          "$canvas" --version
+          OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$canvas" serve --port 43120 &
+          curl -fsS --retry 30 --retry-connrefused --retry-delay 1 -o /dev/null http://127.0.0.1:43120/health
+
+          smoke() { # <kind> <app>
+            "$2" --version
+            OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$2" --smoke | tee "smoke/smoke-$target-$1.json"
+            node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8").trim().split("\n").pop()); if (!r.ok || !r.mounted) { console.error("the editor did not mount"); process.exit(1); }' "smoke/smoke-$target-$1.json"
+          }
+
+          if [ "$RUNNER_OS" = Windows ]; then
             msi_log="$(cygpath -w "$RUNNER_TEMP/msi.log")"
             install() { # <installer file> <exe|msi>
               local file; file="$(cygpath -w "$PWD/app-bundles/$1")"
@@ -99,32 +113,22 @@ jobs:
                 powershell -NoProfile -Command "\$p = Start-Process -Wait -PassThru '$file' -ArgumentList '/S'; exit \$p.ExitCode"
               fi
             }
-            where() { find "$LOCALAPPDATA" "/c/Program Files" "/c/Program Files (x86)" -maxdepth 3 -iname canvas-app.exe 2>/dev/null; }
-            install "canvas-app-$app_version-$target-setup.exe" exe
-            nsis="$(where)"; echo "nsis installed: $nsis"
-            [ -n "$nsis" ] || { echo "the NSIS installer left no canvas-app.exe" >&2; exit 1; }
-            apps+=("setup:$nsis")
-            install "canvas-app-$app_version-$target.msi" msi || { tail -40 "$RUNNER_TEMP/msi.log"; exit 1; }
-            # Whatever the MSI added beside the NSIS copy.
-            msi="$(where | grep -vxF "$nsis" | head -n 1)"; echo "msi installed: $msi"
-            [ -n "$msi" ] || { tail -60 "$RUNNER_TEMP/msi.log"; where; echo "the MSI left no canvas-app.exe" >&2; exit 1; }
-            apps+=("msi:$msi")
+            where() { find "$LOCALAPPDATA" "/c/Program Files" "/c/Program Files (x86)" -maxdepth 3 -iname canvas-app.exe 2>/dev/null || true; }
+            # One installer at a time, from a machine without the app: the first one's directory is deleted before the next.
+            for kind in setup msi; do
+              [ -z "$(where)" ] || { echo "canvas-app.exe is already installed:" >&2; where >&2; exit 1; }
+              if [ "$kind" = setup ]; then install "canvas-app-$app_version-$target-setup.exe" exe; else install "canvas-app-$app_version-$target.msi" msi || { tail -40 "$RUNNER_TEMP/msi.log"; exit 1; }; fi
+              exe="$(where | head -n 1)"
+              [ -n "$exe" ] || { echo "the $kind installer left no canvas-app.exe" >&2; [ ! -f "$RUNNER_TEMP/msi.log" ] || tail -60 "$RUNNER_TEMP/msi.log"; exit 1; }
+              echo "$kind installed $exe"
+              smoke "$kind" "$exe"
+              rm -rf "$(dirname "$exe")"
+            done
           else
-            tar -xzf "release/canvas-$version-$target.tar.gz" -C cli
-            canvas="$PWD/cli/bin/canvas"
             dmg="$(ls app-bundles/canvas-app-*-$target.dmg)"
             hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/dmg" "$dmg"
-            apps+=("dmg:$RUNNER_TEMP/dmg/Canvas.app/Contents/MacOS/canvas-app")
+            smoke dmg "$RUNNER_TEMP/dmg/Canvas.app/Contents/MacOS/canvas-app"
           fi
-          "$canvas" --version
-          OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$canvas" serve --port 43120 &
-          curl -fsS --retry 30 --retry-connrefused --retry-delay 1 -o /dev/null http://127.0.0.1:43120/health
-          for entry in "${apps[@]}"; do
-            kind="${entry%%:*}"; app="${entry#*:}"
-            "$app" --version
-            OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$app" --smoke | tee "smoke/smoke-$target-$kind.json"
-            node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8").trim().split("\n").pop()); if (!r.ok || !r.mounted) { console.error("the editor did not mount"); process.exit(1); }' "smoke/smoke-$target-$kind.json"
-          done
 
       # D14: the built .deb installed with the canvas .deb, smoke under xvfb on both architectures; the file checks on x64.
       - uses: actions/download-artifact@v4
