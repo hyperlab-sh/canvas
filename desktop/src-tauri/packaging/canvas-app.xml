@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-openflow+json">
+    <comment>Canvas diagram</comment>
+    <sub-class-of type="application/json"/>
+    <glob pattern="*.openflow.json" weight="60"/>
+  </mime-type>
+  <mime-type type="text/x-openflow">
+    <comment>Canvas diagram text</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.openflow" weight="60"/>
+  </mime-type>
+  <mime-type type="text/vnd.mermaid">
+    <comment>Mermaid diagram</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.mmd" weight="60"/>
+  </mime-type>
+</mime-info>

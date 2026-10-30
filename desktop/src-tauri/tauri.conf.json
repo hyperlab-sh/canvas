@@ -2,7 +2,9 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Canvas",
   "identifier": "sh.hyperlab.canvas",
-  "build": { "frontendDist": "../ui" },
+  "build": {
+    "frontendDist": "../ui"
+  },
   "app": {
     "withGlobalTauri": true,
     "windows": [],
@@ -21,9 +23,64 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "Native window for the Canvas diagram editor"
+    "shortDescription": "Native window for the Canvas diagram editor",
+    "fileAssociations": [
+      {
+        "ext": [
+          "openflow.json"
+        ],
+        "name": "Canvas diagram",
+        "description": "Canvas diagram",
+        "mimeType": "application/x-openflow+json",
+        "role": "Editor"
+      },
+      {
+        "ext": [
+          "openflow"
+        ],
+        "name": "Canvas diagram text",
+        "description": "Canvas diagram text",
+        "mimeType": "text/x-openflow",
+        "role": "Editor"
+      },
+      {
+        "ext": [
+          "mmd"
+        ],
+        "name": "Mermaid diagram",
+        "description": "Mermaid diagram",
+        "mimeType": "text/vnd.mermaid",
+        "role": "Editor",
+        "rank": "Alternate"
+      }
+    ],
+    "linux": {
+      "deb": {
+        "desktopTemplate": "packaging/canvas-app.desktop",
+        "files": {
+          "/usr/share/mime/packages/canvas-app.xml": "packaging/canvas-app.xml"
+        }
+      },
+      "rpm": {
+        "desktopTemplate": "packaging/canvas-app.desktop",
+        "files": {
+          "/usr/share/mime/packages/canvas-app.xml": "packaging/canvas-app.xml"
+        }
+      },
+      "appimage": {
+        "files": {
+          "/usr/share/mime/packages/canvas-app.xml": "packaging/canvas-app.xml"
+        }
+      }
+    }
   },
   "plugins": {
-    "deep-link": { "desktop": { "schemes": ["canvas"] } }
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "canvas"
+        ]
+      }
+    }
   }
 }

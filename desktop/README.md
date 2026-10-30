@@ -18,6 +18,19 @@ it shows `http://127.0.0.1:<port>`, where `canvas serve` (or `canvas service ins
   (one instance). The window only ever navigates to the bundled page and to `http://127.0.0.1:<port>`;
   `localhost`, other ports, other hosts and `file:` are refused. (`blob:` URLs minted by the service page are
   allowed, because that is how exports download.)
+- **Files:** a diagram file dropped on the window, opened with the app (argv, `open -a Canvas f`, `xdg-open`, "Open
+  With") or passed on the command line opens as a diagram. The first openable file wins when several arrive.
+  - `*.openflow.json` inside a project the service knows (matched by real path, as `canvas open` does) opens in place.
+  - `*.openflow.json` anywhere else is imported into the `scratch` project as a copy with a new id (dropping the
+    same file twice imports it twice) and opened.
+  - `*.openflow` (OpenFlow DSL) and `*.mmd` (Mermaid) open as a new diagram titled by the file name, through the
+    editor's `#/from/dsl` route; the file must be UTF-8 text of at most 1 MB.
+  - Other files are ignored. The drop is handled natively, so the page never receives the file and the window
+    never navigates to it. With the service down the file is held and opens once it answers.
+  - A file that cannot be opened (not a diagram, rejected by the service) is reported on stderr only.
+  - Associations: Linux registers all three globs (`share/mime/packages/canvas-app.xml`, `Exec=... %U`). macOS and
+    Windows only match the last extension of a name, so there `.openflow` and `.mmd` are associated and
+    `.openflow.json` opens by drop, "Open With", `open -a Canvas f` or `canvas open`.
 - **Downloads:** exports are saved in the OS Downloads folder (created if missing), never overwriting a file
   (`name (1).png`). macOS asks once whether Canvas may access Downloads.
 
