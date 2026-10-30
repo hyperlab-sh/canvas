@@ -95,10 +95,8 @@ test('the release workflow signs and publishes only for a real tag, and the publ
   assert.equal(publish.field('needs'), '[repos, github-release]');
   assert.equal(publish.field('if'), tag);
   assert.match(publish.text, /needs\.repos\.outputs\.base_sha/);
-  // One parentless commit, forced only over the commit the trees were built on.
-  assert.match(publish.text, /git checkout --orphan/);
-  assert.match(publish.text, /git push --force-with-lease="gh-pages:\$base" origin HEAD:gh-pages/);
-  assert.doesNotMatch(publish.text, /git push origin/);
+  assert.match(publish.text, /packaging\/repos\/publish\.sh/);
+  assert.doesNotMatch(publish.text, /git push/);
   assert.equal(job('ci.yml', 'repos').field('needs'), '[packages, app]');
   assert.equal(job('ci.yml', 'repos').field('uses'), './.github/workflows/repos.yml');
   assert.equal(job('ci.yml', 'repos').field('release', 6), undefined);
@@ -166,6 +164,91 @@ test('listPool and the CLI prune work on a real tree', () => {
     const r = spawnSync('node', [path('packaging/repos/retention.mjs'), 'prune', dir], { encoding: 'utf8' });
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(listPool(dir), files.filter((f) => !f.includes('0.1.0')).sort());
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+const git = (cwd, ...args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' } });
+const put = (dir, file, text = file) => {
+  mkdirSync(join(dir, file, '..'), { recursive: true });
+  writeFileSync(join(dir, file), text);
+};
+
+/** A bare remote whose gh-pages holds `files` in two commits, and a checkout of it. */
+function pagesFixture(files) {
+  const dir = mkdtempSync(join(tmpdir(), 'publish-test-'));
+  const seed = join(dir, 'seed');
+  const remote = join(dir, 'remote.git');
+  const site = join(dir, 'site');
+  mkdirSync(seed);
+  assert.equal(git(seed, 'init', '-q', '-b', 'gh-pages').status, 0);
+  put(seed, 'canvas.asc');
+  git(seed, 'add', '-A');
+  assert.equal(git(seed, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'seed').status, 0);
+  for (const f of files) put(seed, f);
+  git(seed, 'add', '-A');
+  assert.equal(git(seed, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'packages').status, 0);
+  assert.equal(spawnSync('git', ['clone', '-q', '--bare', seed, remote]).status, 0);
+  assert.equal(spawnSync('git', ['clone', '-q', '-b', 'gh-pages', remote, site]).status, 0);
+  return { dir, remote, site };
+}
+
+const publish = (site, tree) =>
+  spawnSync('bash', [path('packaging/repos/publish.sh'), site, ...(tree ? [tree] : [])], {
+    env: { ...process.env, PUBLISH_MESSAGE: 'chore(repos): canvas v9', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' },
+    encoding: 'utf8',
+  });
+
+test('publish.sh makes the site match the checked tree, drops pruned files, and leaves one parentless commit', () => {
+  const { dir, remote, site } = pagesFixture(['apt/pool/old.deb', 'rpm/x86_64/repodata/old.xml.gz']);
+  try {
+    const tree = join(dir, 'tree');
+    put(tree, 'canvas.asc');
+    put(tree, 'apt/pool/new.deb');
+    put(tree, '.nojekyll', '');
+    const r = publish(site, tree);
+    assert.equal(r.status, 0, r.stderr);
+    const files = git(remote, 'ls-tree', '-r', '--name-only', 'gh-pages').stdout.trim().split('\n').sort();
+    assert.deepEqual(files, ['.nojekyll', 'apt/pool/new.deb', 'canvas.asc']);
+    assert.equal(git(remote, 'rev-list', '--count', 'gh-pages').stdout.trim(), '1');
+    assert.equal(git(remote, 'log', '-1', '--format=%s', 'gh-pages').stdout.trim(), 'chore(repos): canvas v9');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('publish.sh refuses to push when gh-pages moved since the site was checked out', () => {
+  const { dir, remote, site } = pagesFixture(['a']);
+  try {
+    const other = join(dir, 'other');
+    assert.equal(spawnSync('git', ['clone', '-q', '-b', 'gh-pages', remote, other]).status, 0);
+    put(other, 'b');
+    git(other, 'add', '-A');
+    git(other, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'another release');
+    assert.equal(git(other, 'push', '-q', 'origin', 'gh-pages').status, 0);
+    const before = git(remote, 'rev-parse', 'gh-pages').stdout;
+    const tree = join(dir, 'tree');
+    put(tree, 'canvas.asc');
+    const r = publish(site, tree);
+    assert.notEqual(r.status, 0);
+    assert.equal(git(remote, 'rev-parse', 'gh-pages').stdout, before);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('publish.sh pushes nothing when the tree equals the site', () => {
+  const { dir, remote, site } = pagesFixture(['a']);
+  try {
+    const before = git(remote, 'rev-parse', 'gh-pages').stdout;
+    const tree = join(dir, 'tree');
+    spawnSync('cp', ['-a', `${site}/.`, tree]);
+    spawnSync('rm', ['-rf', join(tree, '.git')]);
+    const same = publish(site, tree);
+    assert.equal(same.status, 0, same.stderr);
+    assert.match(same.stdout, /repositories unchanged/);
+    assert.equal(git(remote, 'rev-parse', 'gh-pages').stdout, before);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

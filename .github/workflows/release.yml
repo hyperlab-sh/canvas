@@ -181,26 +181,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y apt-utils createrepo-c rpm gnupg dpkg-dev
+          node src/packaging/repos/retention.mjs list site > before.txt
           src/packaging/repos/build.sh site in/packages in/app
-
-      - name: Use the checked trees
-        if: steps.moved.outputs.moved == 'false'
-        run: cp -a "$RUNNER_TEMP/repos/." site/
+          src/packaging/repos/check.sh site before.txt "$RELEASE_URL"
 
       # gh-pages keeps no history: the site is one parentless commit forced over the commit it was built on (the lease), so old
-      # packages do not pile up in the repository. The lease also fails the push if gh-pages moves in the meantime.
+      # packages do not pile up in the repository. The checked trees replace the site, so pruned packages leave it too.
       - name: Publish the trees as a single commit
+        env:
+          PUBLISH_MESSAGE: "chore(repos): canvas ${{ github.ref_name }}"
         run: |
-          cd site
-          base="$(git rev-parse HEAD)"
-          git config user.name "canvas release"
-          git config user.email "actions@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet && { echo "repositories unchanged"; exit 0; }
-          git checkout --orphan pages-new
-          git add -A
-          git commit -m "chore(repos): canvas ${GITHUB_REF_NAME#v}"
-          git push --force-with-lease="gh-pages:$base" origin HEAD:gh-pages
+          if [ "${{ steps.moved.outputs.moved }}" = true ]; then src/packaging/repos/publish.sh site
+          else src/packaging/repos/publish.sh site "$RUNNER_TEMP/repos"; fi
 
       # Pages deploys after the push and its CDN may keep the old file for ten minutes; ask with a fresh query string and wait up to 20.
       - name: Pages serves it

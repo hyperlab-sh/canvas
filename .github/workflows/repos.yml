@@ -69,25 +69,8 @@ jobs:
           REPO_EXPECT_FPR: ${{ inputs.release && 'CBE706A42B7AED6141667D695239F12AF24A7030' || '' }}
         run: packaging/repos/build.sh site in/packages in/app
 
-      - name: The trees carry both packages for both architectures
-        run: |
-          cli="$(node -p "require('./package.json').version")"
-          app="$(node scripts/app-assets.mjs version)"
-          for f in "apt/pool/main/c/canvas/canvas_${cli}_amd64.deb" "apt/pool/main/c/canvas/canvas_${cli}_arm64.deb" \
-                   "apt/pool/main/c/canvas-app/canvas-app_${app}_amd64.deb" "apt/pool/main/c/canvas-app/canvas-app_${app}_arm64.deb" \
-                   "rpm/x86_64/canvas-${cli}-1.x86_64.rpm" "rpm/aarch64/canvas-${cli}-1.aarch64.rpm" \
-                   "rpm/x86_64/canvas-app-${app}-1.x86_64.rpm" "rpm/aarch64/canvas-app-${app}-1.aarch64.rpm" \
-                   apt/dists/stable/InRelease apt/dists/stable/Release.gpg rpm/x86_64/repodata/repomd.xml.asc rpm/aarch64/repodata/repomd.xml.asc \
-                   canvas.asc canvas-archive-keyring.gpg canvas.repo; do
-            test -s "site/$f" || { echo "missing $f" >&2; exit 1; }
-          done
-
-      # Earlier versions stay (up to the retention limit in retention.mjs) and no package exceeds it.
-      - name: Prior versions are kept
-        run: node packaging/repos/retention.mjs check site before.txt
-
-      - name: canvas.repo names this site
-        run: grep -qxF "baseurl=${{ inputs.release && 'https://hyperlab-sh.github.io/canvas' || 'http://127.0.0.1:8080' }}/rpm/\$basearch" site/canvas.repo
+      - name: The trees carry both packages for both architectures, prior versions stay, canvas.repo names this site
+        run: packaging/repos/check.sh site before.txt "${{ inputs.release && 'https://hyperlab-sh.github.io/canvas' || 'http://127.0.0.1:8080' }}"
 
       - name: C-7, no verification is turned off
         run: |
