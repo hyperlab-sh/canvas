@@ -1,7 +1,7 @@
 // Names, collects and checksums the desktop app bundles (the CI side of `desktop/`).
 //   node scripts/app-assets.mjs collect <bundle dir> <os-cpu> <out dir>   copy the target's bundles to canvas-app-<v>-<os>-<cpu>.<ext>
 //   node scripts/app-assets.mjs version                                   print the app version
-//   node scripts/app-assets.mjs expected [version]                        print the full asset list, one name per line
+//   node scripts/app-assets.mjs expected <version>                        print the full asset list, one name per line
 //   node scripts/app-assets.mjs check <dir>                              fail unless <dir> holds exactly that list
 //   node scripts/app-assets.mjs sums <dir> <SHA256SUMS>                   append the app assets in <dir> to SHA256SUMS
 //   node scripts/app-assets.mjs config                                    print the Tauri config override with the canvas dependency
@@ -107,7 +107,8 @@ function main([command, ...args]) {
       console.log(appVersion());
       return;
     case 'expected':
-      console.log(expectedAssets(args[0] ?? appVersion()).join('\n'));
+      if (!args[0]) throw new Error('usage: app-assets.mjs expected <version>');
+      console.log(expectedAssets(args[0]).join('\n'));
       return;
     case 'check': {
       const { missing, unexpected } = diffAssets(readdirSync(resolve(args[0])), appVersion());
