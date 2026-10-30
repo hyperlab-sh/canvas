@@ -290,7 +290,7 @@ describe('runOpen', () => {
     ['linux', [], ['sudo apt install canvas-app', 'sudo dnf install canvas-app', 'sudo zypper install canvas-app'], ['brew', 'scoop']],
   ]) {
     it(`--app without the app on ${platform}${managers.length ? ` with ${managers[0]}` : ' with no package manager'} prints that platform's command`, async () => {
-      const h = harness({ platform, detectApp: () => false, detectManagers: () => managers });
+      const h = harness({ platform, detectApp: () => false, detectManagers: platform === 'linux' ? () => managers : () => { throw new Error('not on this platform'); } });
       for (const args of [['--app'], ['notes/flow', '--app']]) {
         h.lines.err.length = 0;
         assert.equal(await h.run(args), 1);
