@@ -71,6 +71,27 @@ pub fn open_url(pending: Option<&str>, origin: &str) -> String {
     pending.map_or_else(|| origin.to_string(), str::to_string)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum Resolved {
+    /// The window already moved to something else: a link or drop that moved it wins.
+    Abandon,
+    /// A request was held while the file resolved (the service stopped answering): serve that instead.
+    Retry,
+    /// Nothing newer: show what resolved.
+    Navigate,
+}
+
+/// What the hand-over does once a held file has resolved (the resolve awaited, so the world may have moved).
+pub fn after_resolve(on_bundled: bool, link_held: bool, file_held: bool) -> Resolved {
+    if !may_hand_over(on_bundled) {
+        Resolved::Abandon
+    } else if link_held || file_held {
+        Resolved::Retry
+    } else {
+        Resolved::Navigate
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,5 +159,13 @@ mod tests {
     fn open_prefers_the_held_link_and_falls_back_to_the_origin() {
         assert_eq!(open_url(Some("http://127.0.0.1:43120/#/p/a/b"), ORIGIN), "http://127.0.0.1:43120/#/p/a/b");
         assert_eq!(open_url(None, ORIGIN), ORIGIN);
+    }
+
+    #[test]
+    fn after_resolve_abandons_retries_or_navigates() {
+        assert_eq!(after_resolve(false, true, true), Resolved::Abandon);
+        assert_eq!(after_resolve(true, true, false), Resolved::Retry);
+        assert_eq!(after_resolve(true, false, true), Resolved::Retry);
+        assert_eq!(after_resolve(true, false, false), Resolved::Navigate);
     }
 }

@@ -16,6 +16,7 @@ mod smoke;
 
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use tauri::webview::DownloadEvent;
@@ -31,6 +32,9 @@ struct AppState {
     /// The file opened (dropped, associated, argv) while the service was not answering; the newest request
     /// replaces any held link and the other way round.
     pending_files: Mutex<Option<PathBuf>>,
+    /// Counts link and file requests. A file resolves off the main thread; if the count moved meanwhile a newer
+    /// request exists and the older one must not navigate over it.
+    requests: AtomicU64,
     /// Set in `--smoke` mode only.
     smoke: Option<smoke::SmokeSender>,
 }
@@ -66,6 +70,7 @@ fn handle_deep_link(app: &AppHandle, link: &str) {
         eprintln!("canvas-app: ignoring link {link:?}");
         return;
     };
+    app.state::<AppState>().requests.fetch_add(1, Ordering::SeqCst);
     let app = app.clone();
     std::thread::spawn(move || {
         let state = app.state::<AppState>();
@@ -104,6 +109,7 @@ fn hold_link(app: &AppHandle, url: String) {
 /// When the service is not answering the file is held and the bundled page is shown, as for a deep link.
 fn handle_files(app: &AppHandle, paths: Vec<PathBuf>) {
     let Some(path) = paths.into_iter().next() else { return };
+    let ticket = app.state::<AppState>().requests.fetch_add(1, Ordering::SeqCst) + 1;
     let app = app.clone();
     std::thread::spawn(move || {
         let state = app.state::<AppState>();
@@ -112,6 +118,10 @@ fn handle_files(app: &AppHandle, paths: Vec<PathBuf>) {
         let on_main = app.clone();
         let _ = app.run_on_main_thread(move || {
             let state = on_main.state::<AppState>();
+            if state.requests.load(Ordering::SeqCst) != ticket {
+                eprintln!("canvas-app: not opening {}: a newer request arrived", path.display());
+                return;
+            }
             match route::after_file(up, on_bundled(&on_main)) {
                 route::FileAction::Open => match resolved.expect("resolved while the service answers") {
                     Ok(url) => {
@@ -185,13 +195,13 @@ async fn open_service(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
                 let resolved = tauri::async_runtime::spawn_blocking(move || open_file::resolve(&origin, &file, &open_file::Service(port)))
                     .await
                     .map_err(|error| error.to_string())?;
-                // Resolving awaited. A link or drop that moved the window wins.
-                if !route::may_hand_over(on_bundled(&app)) {
-                    return Ok(());
-                }
-                // One held meanwhile (the service stopped answering) is newer: serve it instead.
-                if state.pending.lock().unwrap().is_some() || state.pending_files.lock().unwrap().is_some() {
-                    continue;
+                // Resolving awaited: a link or drop that moved the window wins, and one held meanwhile (the
+                // service stopped answering) is newer, so it is served instead.
+                let (link_held, file_held) = (state.pending.lock().unwrap().is_some(), state.pending_files.lock().unwrap().is_some());
+                match route::after_resolve(on_bundled(&app), link_held, file_held) {
+                    route::Resolved::Abandon => return Ok(()),
+                    route::Resolved::Retry => continue,
+                    route::Resolved::Navigate => {}
                 }
                 resolved.unwrap_or_else(|error| {
                     eprintln!("canvas-app: cannot open {}: {error}", retry.display());
@@ -230,6 +240,7 @@ fn run(smoke_mode: bool) {
         port,
         pending: Mutex::new(None),
         pending_files: Mutex::new(None),
+        requests: AtomicU64::new(0),
         smoke: smoke_mode.then(|| smoke::SmokeSender(Mutex::new(report_sender))),
     };
 

@@ -42,10 +42,15 @@ pub fn title(path: &Path) -> String {
 
 /// The openable files among launch arguments. Flags, `canvas://` links (the deep-link plugin takes those),
 /// and files of any other kind are skipped, so an arbitrary argument cannot make the app read a file.
+/// `file://` arguments are mapped to paths: GIO expands the desktop entry's `%U` to URIs on Linux.
 pub fn from_args(args: impl IntoIterator<Item = String>) -> Vec<PathBuf> {
     args.into_iter()
-        .filter(|arg| !arg.starts_with('-') && !arg.contains("://"))
-        .map(PathBuf::from)
+        .filter(|arg| !arg.starts_with('-'))
+        .filter_map(|arg| match Url::parse(&arg) {
+            Ok(url) if url.scheme() == "file" => url.to_file_path().ok(),
+            _ if arg.contains("://") => None,
+            _ => Some(PathBuf::from(arg)),
+        })
         .filter(|path| kind(path).is_some())
         .collect()
 }
@@ -114,6 +119,18 @@ mod tests {
     fn args_keep_only_openable_files() {
         let args = ["--smoke", "canvas://open/p/i", "/x/a.mmd", "/etc/passwd", "-psn_0_1", "b.openflow.json", "http://x/a.mmd"].map(String::from);
         assert_eq!(from_args(args), vec![p("/x/a.mmd"), p("b.openflow.json")]);
+    }
+
+    #[test]
+    fn file_url_args_become_paths() {
+        let args = ["file:///x/a%20b.openflow.json", "file:///x/a.png", "canvas://open/p/i", "http://x/a.mmd", "file:///x/c.mmd"].map(String::from);
+        assert_eq!(from_args(args), vec![p("/x/a b.openflow.json"), p("/x/c.mmd")]);
+    }
+
+    #[test]
+    fn file_url_args_stay_absolute_in_a_directory() {
+        let args = ["file:///x/a%20b.openflow.json", "file:///x/a.png", "canvas://open/p/i", "http://x/a.mmd", "rel.mmd"].map(String::from);
+        assert_eq!(from_args_in(args, Path::new("/work")), vec![p("/x/a b.openflow.json"), p("/work/rel.mmd")]);
     }
 
     #[test]
