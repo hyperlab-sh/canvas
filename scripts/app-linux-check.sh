@@ -136,7 +136,7 @@ drop="$work/drop.openflow.json"
 cat > "$drop" <<'JSON'
 {"format":"openflowkit.scene","schemaVersion":1,"id":"d14-drop","name":"d14 xdnd drop","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","pages":[{"id":"d14-drop:page-1","name":"Page 1","diagramKind":"flowchart","layers":[{"id":"default","name":"Default","visible":true,"locked":false}],"nodes":[],"connectors":[],"metadata":{},"extensions":{}}],"metadata":{},"extensions":{}}
 JSON
-python3 "$(dirname "$0")/app-xdnd-source.py" "file://$drop" 1500 100 >"$work/source.log" 2>&1 &
+timeout 60 python3 "$(dirname "$0")/app-xdnd-source.py" "file://$drop" 1500 100 >"$work/source.log" 2>&1 &
 source_pid=$!
 for _ in $(seq 1 50); do grep -q ready "$work/source.log" && break; sleep 0.2; done
 grep -q ready "$work/source.log" || { cat "$work/source.log"; fail "the drag source did not start"; }
@@ -146,8 +146,9 @@ for step in 1 2 3 4 5 6 7 8; do
   xdotool mousemove $((1600 - step * (1600 - X - WIDTH / 2) / 8)) $((200 + step * (Y + HEIGHT / 2 - 200) / 8)) sleep 0.15
 done
 xdotool sleep 0.3 mouseup 1
-wait "$source_pid" || { cat "$work/source.log"; fail "the drag source failed"; }
-grep -q drag-end "$work/source.log" || { cat "$work/source.log"; fail "the drag ended without a drop"; }
+# The source exits when the drag ends; the timeout turns a drag that never started into a failure.
+wait "$source_pid" || { cat "$work/source.log"; fail "the drag source failed or never saw a drag"; }
+! grep -q drag-failed "$work/source.log" || { cat "$work/source.log"; fail "the drag was cancelled or not accepted"; }
 wait_for_title "d14 xdnd drop"
 wait_for_window_on "d14 xdnd drop"
 echo "::endgroup::"
