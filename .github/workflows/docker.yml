@@ -1,0 +1,56 @@
+name: Docker image
+
+# Builds the service image from the linux release archives for both architectures and checks that /health answers from outside
+# the container. Called by ci.yml (every PR) and release.yml; it never publishes, the release workflow's docker job does.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: image (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the image
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          docker buildx build --platform "linux/${{ matrix.arch }}" --build-arg "VERSION=$version" -f packaging/docker/Dockerfile --load -t canvas:test release
+
+      # arm64 runs under QEMU here, so give the service time to start.
+      - name: /health answers from outside the container
+        run: |
+          docker run -d --name canvas -p 43120:43120 canvas:test
+          for _ in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:43120/health > health.json && break
+            sleep 1
+          done || true
+          docker logs canvas
+          cat health.json
+          node -e "const h = JSON.parse(require('fs').readFileSync('health.json')); if (!h.ok || !h.version) process.exit(1)"
+          curl -fsS -o /dev/null http://127.0.0.1:43120/
+
+      - name: The service runs as an unprivileged user and keeps its projects in /data
+        run: |
+          [ "$(docker exec canvas id -u)" != 0 ] || { echo "the service runs as root" >&2; exit 1; }
+          docker exec canvas test -f /data/service.json

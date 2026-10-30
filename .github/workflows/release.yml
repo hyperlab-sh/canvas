@@ -51,6 +51,11 @@ jobs:
     needs: binaries
     uses: ./.github/workflows/packages.yml
 
+  # The dry run builds and checks the image; only the docker job below pushes it.
+  docker-check:
+    needs: binaries
+    uses: ./.github/workflows/docker.yml
+
   github-release:
     needs: [binaries, packages]
     if: startsWith(github.ref, 'refs/tags/') && !inputs.dry_run
@@ -89,6 +94,45 @@ jobs:
             grep -qF "  $f" SHA256SUMS || { echo "$f is not in SHA256SUMS" >&2; exit 1; }
           done
           sha256sum -c SHA256SUMS
+
+  # ghcr.io/hyperlab-sh/canvas:<version> and :latest for amd64 and arm64, pushed only after the checked image and the release exist.
+  docker:
+    needs: [binaries, docker-check, github-release]
+    if: startsWith(github.ref, 'refs/tags/') && !inputs.dry_run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          docker buildx build --platform linux/amd64,linux/arm64 --build-arg "VERSION=$version" -f packaging/docker/Dockerfile \
+            -t "ghcr.io/hyperlab-sh/canvas:$version" -t ghcr.io/hyperlab-sh/canvas:latest --push release
+
+      - name: The pushed image answers /health
+        run: |
+          docker run -d --name canvas -p 43120:43120 "ghcr.io/hyperlab-sh/canvas:${GITHUB_REF_NAME#v}"
+          for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:43120/health && exit 0; sleep 1; done
+          docker logs canvas
+          exit 1
 
   # D7: the flake reads nix/release.json, which only exists once the release does. The dry run regenerates it from the built
   # archives and shows the diff without committing.
