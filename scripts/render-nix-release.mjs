@@ -1,8 +1,7 @@
 // Prints nix/release.json for a release from its SHA256SUMS: the version and the archive hashes in Nix (SRI) format.
-//   node scripts/render-nix-release.mjs <version> <release-dir|SHA256SUMS>
+//   node scripts/render-nix-release.mjs <version> <SHA256SUMS>
 // flake.nix reads the output; the release workflow commits it to main once the GitHub release exists.
-import { readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // Nix system -> archive suffix of canvas-<version>-<suffix>.tar.gz
@@ -27,7 +26,6 @@ export function renderNixRelease(version, sumsText) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [version, source] = process.argv.slice(2);
-  if (!version || !source) throw new Error('usage: render-nix-release.mjs <version> <release-dir|SHA256SUMS>');
-  const sumsFile = statSync(source).isDirectory() ? join(source, 'SHA256SUMS') : source;
-  process.stdout.write(renderNixRelease(version, readFileSync(sumsFile, 'utf8')));
+  if (!version || !source) throw new Error('usage: render-nix-release.mjs <version> <SHA256SUMS>');
+  process.stdout.write(renderNixRelease(version, readFileSync(source, 'utf8')));
 }

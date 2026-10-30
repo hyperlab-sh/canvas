@@ -63,9 +63,17 @@ test('a SHA256SUMS missing an archive, or from another version, is refused', asy
   assert.throws(() => renderNixRelease('9.9.9', line), /canvas-9\.9\.9-linux-x64\.tar\.gz is not in SHA256SUMS/);
 });
 
-test('the committed nix/release.json is what the generator would print for its own hashes', async () => {
+test('the committed nix/release.json is in the generator\'s canonical format (hashes are checked against the published SHA256SUMS in ci.yml)', async () => {
   const { renderNixRelease, SYSTEMS } = await import('../scripts/render-nix-release.mjs');
   const committed = JSON.parse(readFileSync(new URL('../nix/release.json', import.meta.url), 'utf8'));
   const sums = Object.entries(SYSTEMS).map(([system, t]) => `${Buffer.from(committed.hashes[system].slice(7), 'base64').toString('hex')}  canvas-${committed.version}-${t}.tar.gz`).join('\n');
   assert.equal(renderNixRelease(committed.version, sums), readFileSync(new URL('../nix/release.json', import.meta.url), 'utf8'));
+});
+
+test('flake.nix builds exactly the systems the generator hashes', async () => {
+  const { SYSTEMS } = await import('../scripts/render-nix-release.mjs');
+  const flake = readFileSync(new URL('../flake.nix', import.meta.url), 'utf8');
+  const block = flake.match(/targets = \{([^}]*)\}/)[1];
+  const targets = Object.fromEntries([...block.matchAll(/([\w-]+) = "([\w-]+)";/g)].map((m) => [m[1], m[2]]));
+  assert.deepEqual(targets, SYSTEMS);
 });

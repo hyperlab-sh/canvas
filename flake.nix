@@ -25,7 +25,6 @@
             };
             # The archive has no top-level directory (bin/, share/ at its root), so unpack it into the build directory as it is.
             unpackPhase = "tar -xzf $src";
-            sourceRoot = ".";
             # Stripping would corrupt the binary (bun plus an appended payload).
             dontStrip = true;
             # The Linux binary asks for the FHS loader, which NixOS does not have.
@@ -57,5 +56,5 @@
       });
     };
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 }
