@@ -151,7 +151,7 @@ test('the check passes when only older versions went, and names a file that went
 });
 
 test('the check names an earlier file whose name is not a package name', () => {
-  assert.deepEqual(problems(['apt/pool/main/x/odd/odd.deb'], []), ['apt/pool/main/x/odd/odd.deb disappeared']);
+  assert.deepEqual(problems(['apt/pool/main/x/odd/odd.deb'], [deb('canvas', '0.1.0')]), ['apt/pool/main/x/odd/odd.deb disappeared']);
 });
 
 test('listPool and the CLI prune work on a real tree', () => {
