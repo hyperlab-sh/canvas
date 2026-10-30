@@ -94,8 +94,7 @@ jobs:
           tap="$(brew --repository hyperlab-sh/tap)"
           mkdir -p "$tap/Casks"
           node scripts/render-cask.mjs "$(node scripts/app-assets.mjs version)" assets > "$tap/Casks/canvas-app.rb"
-          # Current Homebrew's style rules reject `postflight` (A5 needs it: there is no quarantine step in postflight_steps).
-          # Reported, not gating; audit gates.
+          # Style findings are reported, not gating; audit gates.
           brew style --cask hyperlab-sh/tap/canvas-app || echo "::warning::brew style findings on the cask (see the log)"
           # Audit loads the cask from an untrusted tap and has no full-name install to trust it. Its trust lives in a throwaway
           # store, so the install step below starts from the untrusted tap a new user has.
@@ -103,8 +102,8 @@ jobs:
           brew trust hyperlab-sh/tap
           brew audit --cask hyperlab-sh/tap/canvas-app
 
-      # Homebrew quarantines cask downloads by default (a user install does the same). The postflight is proven to matter:
-      # the cached dmg carries the quarantine, a copy of the cask without the postflight leaves the app quarantined, and
+      # Homebrew quarantines cask downloads by default (a user install does the same). The postflight_steps are proven to matter:
+      # the cached dmg carries the quarantine, a copy of the cask without them leaves the app quarantined, and
       # only the real cask leaves it clean.
       - name: Install the cask, check the quarantine, smoke the app
         run: |
@@ -122,25 +121,25 @@ jobs:
           node scripts/render-cask.mjs "$app_version" assets --base http://127.0.0.1:8000 > "$RUNNER_TEMP/canvas-app.rb"
           app=/Applications/Canvas.app
 
-          # Without the postflight: the app must come out quarantined, or the check below proves nothing.
-          awk '/^  postflight do$/ { skip = 1 } !skip { print } skip && /^  end$/ { skip = 0 }' "$RUNNER_TEMP/canvas-app.rb" > "$tap/Casks/canvas-app.rb"
-          if grep -q postflight "$tap/Casks/canvas-app.rb"; then echo "the postflight was not removed from the control cask" >&2; exit 1; fi
+          # Without the postflight_steps: the app must come out quarantined, or the check below proves nothing.
+          awk '/^  postflight_steps do$/ { skip = 1 } !skip { print } skip && /^  end$/ { skip = 0 }' "$RUNNER_TEMP/canvas-app.rb" > "$tap/Casks/canvas-app.rb"
+          if grep -q postflight_steps "$tap/Casks/canvas-app.rb"; then echo "the postflight_steps were not removed from the control cask" >&2; exit 1; fi
           # The documented order: the formula by full name, then the cask. Homebrew trusts only the item named, so a
           # cask-only install of a fresh tap refuses the cask's formula dependency.
           brew install hyperlab-sh/tap/canvas
           brew install --cask hyperlab-sh/tap/canvas-app 2>&1 | tee "$RUNNER_TEMP/install-control.log"
           dmg="$(brew --cache --cask hyperlab-sh/tap/canvas-app)"
           xattr -p com.apple.quarantine "$dmg" || { echo "Homebrew did not quarantine the downloaded dmg: $dmg" >&2; exit 1; }
-          xattr -r "$app" | grep -q com.apple.quarantine || { echo "the app is not quarantined without the postflight, so the check proves nothing" >&2; exit 1; }
+          xattr -r "$app" | grep -q com.apple.quarantine || { echo "the app is not quarantined without the postflight_steps, so the check proves nothing" >&2; exit 1; }
           brew uninstall --cask hyperlab-sh/tap/canvas-app
           test ! -e "$app"
 
           # The real cask.
           cp "$RUNNER_TEMP/canvas-app.rb" "$tap/Casks/canvas-app.rb"
           brew install --cask hyperlab-sh/tap/canvas-app 2>&1 | tee "$RUNNER_TEMP/install.log"
-          if grep -q "postflight.*deprecated" "$RUNNER_TEMP/install.log"; then
-            echo "::warning::Homebrew deprecates the cask postflight; A5 relies on it (no xattr step in postflight_steps). Users can run: xattr -dr com.apple.quarantine /Applications/Canvas.app"
-          fi
+          if grep -qi deprecated "$RUNNER_TEMP/install.log"; then echo "Homebrew reports a deprecation while installing the cask" >&2; exit 1; fi
+          brew info --cask hyperlab-sh/tap/canvas-app 2>&1 | tee "$RUNNER_TEMP/info.log"
+          if grep -qi deprecated "$RUNNER_TEMP/info.log"; then echo "brew info --cask reports a deprecation" >&2; exit 1; fi
           # The formula was installed first (above), so `brew list` would pass without the dependency; read it from the cask.
           brew info --cask --json=v2 hyperlab-sh/tap/canvas-app | jq -e '.casks[0].depends_on.formula | index("hyperlab-sh/tap/canvas")'
 
