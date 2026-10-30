@@ -6,9 +6,13 @@ All notable changes are listed here, newest first. The format follows
 
 ## [Unreleased]
 
-### Added
-- `canvas open [diagram] [--app|--browser] [--print]` opens a diagram (a file, `project/id`, or an id or title) in the desktop app when it is installed (through its `canvas://` link) and in the default browser otherwise, and starts the service when nothing answers. `--app` and `--browser` force one; `--print` still writes the http link.
+## [0.4.0]
 
+### Added
+- Desktop app `canvas-app` (Tauri 2): a native window onto the running service at `http://127.0.0.1:43120`, with a page that starts the service when it is down, `canvas://open/<project>/<id>` deep links, file associations for `.openflow` and `.mmd` (and `.openflow.json` on Linux), exports saved to Downloads, and `--version` / `--smoke`. The service stays a separate program; see `desktop/README.md`.
+- Install channels: signed apt and dnf/zypper repositories on GitHub Pages (`https://hyperlab-sh.github.io/canvas`); `canvas` and `canvas-app` `.deb` and `.rpm` packages (x86_64, arm64); `canvas-app` as `.dmg` (macOS arm64, x64), `.msi` and `-setup.exe` (Windows x64) and `.AppImage` (Linux x64, arm64); a Homebrew cask `canvas-app`; Scoop manifests `canvas` and `canvas-app` in the tap's `bucket/` folder; winget manifests `Hyperlab.Canvas` and `Hyperlab.CanvasApp` (generated and validated on release, submitted to winget-pkgs by hand); a Nix flake (`nix run github:hyperlab-sh/canvas`). All assets are listed in `SHA256SUMS`.
+- The app and the binaries are not code-signed or notarized. README explains the macOS Gatekeeper and Windows SmartScreen / Smart App Control prompts.
+- `canvas open [diagram] [--app|--browser] [--print]` opens a diagram (a file, `project/id`, or an id or title) in the desktop app when it is installed (through its `canvas://` link) and in the default browser otherwise, and starts the service when nothing answers. `--app` and `--browser` force one; `--print` still writes the http link.
 - Docker image `ghcr.io/hyperlab-sh/canvas:<version>` and `:latest` (linux/amd64 and linux/arm64): `canvas serve` from the release archive on `debian:stable-slim`, bound to all interfaces inside the container, projects in the `/data` volume. Publish the port as `-p 43120:43120` and browse to `http://127.0.0.1:43120`; the service has no authentication, so do not publish it beyond loopback. The service runs as uid 10001: use a named volume for `/data`, or pass `--user "$(id -u):$(id -g)"` when bind-mounting a host directory. The `openflowkit` submodule moves to the fork commit that adds `serve --host` / `OPENFLOWKIT_SERVICE_HOST`.
 
 ## [0.3.0]
