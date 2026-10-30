@@ -144,6 +144,12 @@ jobs:
           name: repos
           path: ${{ runner.temp }}/repos
 
+      # The trees extend the gh-pages commit the repos job saw. If another release pushed since, they would drop its packages:
+      # fail, and re-run the whole workflow so the trees are built again.
+      - name: gh-pages has not moved since the trees were built
+        run: |
+          [ "$(git rev-parse HEAD)" = "${{ needs.repos.outputs.base_sha }}" ] || { echo "gh-pages moved while this release was built; re-run all jobs" >&2; exit 1; }
+
       - name: Commit the trees
         run: |
           cp -a "$RUNNER_TEMP/repos/." .
@@ -152,14 +158,13 @@ jobs:
           git add -A
           git diff --cached --quiet && { echo "repositories unchanged"; exit 0; }
           git commit -m "chore(repos): canvas ${GITHUB_REF_NAME#v}"
-          git pull --rebase origin gh-pages
           git push origin HEAD:gh-pages
 
-      # Pages deploys after the push; wait until it serves the signed index we pushed.
+      # Pages deploys after the push and its CDN may keep the old file for ten minutes; ask with a fresh query string and wait up to 20.
       - name: Pages serves it
         run: |
-          for _ in $(seq 1 40); do
-            curl -fsS https://hyperlab-sh.github.io/canvas/apt/dists/stable/InRelease -o "$RUNNER_TEMP/InRelease" && cmp -s "$RUNNER_TEMP/InRelease" apt/dists/stable/InRelease && exit 0
+          for _ in $(seq 1 80); do
+            curl -fsS "https://hyperlab-sh.github.io/canvas/apt/dists/stable/InRelease?ts=$(date +%s)" -o "$RUNNER_TEMP/InRelease" && cmp -s "$RUNNER_TEMP/InRelease" apt/dists/stable/InRelease && exit 0
             sleep 15
           done
           echo "Pages does not serve the pushed InRelease" >&2

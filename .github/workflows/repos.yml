@@ -10,6 +10,10 @@ on:
         description: Sign with the release key (REPO_GPG_PRIVATE_KEY); otherwise with a throwaway key
         type: boolean
         default: false
+    outputs:
+      base_sha:
+        description: The gh-pages commit the trees were built on
+        value: ${{ jobs.build.outputs.base_sha }}
 
 permissions:
   contents: read
@@ -17,6 +21,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      # The gh-pages commit the trees were built on; the publish job refuses to push on top of another one.
+      base_sha: ${{ steps.base.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,9 +52,17 @@ jobs:
           ref: gh-pages
           path: site
 
+      - id: base
+        run: echo "sha=$(git -C site rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: List the packages already in the tree
+        run: node packaging/repos/retention.mjs list site > before.txt && cat before.txt
+
       - name: Build and sign the trees
         env:
-          REPO_BASE_URL: https://hyperlab-sh.github.io/canvas
+          # The release trees name the Pages URL; a dry run names the local server the install jobs start, so canvas.repo is
+          # the file they add the repository from.
+          REPO_BASE_URL: ${{ inputs.release && 'https://hyperlab-sh.github.io/canvas' || 'http://127.0.0.1:8080' }}
           REPO_GPG_PRIVATE_KEY: ${{ inputs.release && secrets.REPO_GPG_PRIVATE_KEY || '' }}
           REPO_EPHEMERAL_KEY: ${{ inputs.release && '0' || '1' }}
           # D8: the release key. A release run refuses any other.
@@ -66,6 +81,13 @@ jobs:
                    canvas.asc canvas-archive-keyring.gpg canvas.repo; do
             test -s "site/$f" || { echo "missing $f" >&2; exit 1; }
           done
+
+      # Earlier versions stay (up to the retention limit in retention.mjs) and no package exceeds it.
+      - name: Prior versions are kept
+        run: node packaging/repos/retention.mjs check site before.txt
+
+      - name: canvas.repo names this site
+        run: grep -qxF "baseurl=${{ inputs.release && 'https://hyperlab-sh.github.io/canvas' || 'http://127.0.0.1:8080' }}/rpm/\$basearch" site/canvas.repo
 
       - name: C-7, no verification is turned off
         run: |

@@ -9,7 +9,9 @@
 #   REPO_EPHEMERAL_KEY=1  generate a throwaway key (dry runs: nothing is published, the tree carries its public key)
 #   REPO_EXPECT_FPR       optional: refuse a key with another fingerprint
 #   REPO_BASE_URL         the site URL written into canvas.repo
-# Needs apt-ftparchive (apt-utils), dpkg-deb, createrepo_c, rpm (rpmsign), gpg, gzip.
+# Retention: the newest 3 versions of each package for each architecture stay in the pools (retention.mjs); older ones are deleted
+# before the metadata is regenerated, so the site stays far below the 1 GB Pages limit and git history grows by the newest only.
+# Needs node, apt-ftparchive (apt-utils), dpkg-deb, createrepo_c, rpm (rpmsign), gpg, gzip.
 set -euo pipefail
 
 site="${1:?usage: build.sh <site dir> <package dir>...}"
@@ -65,6 +67,8 @@ for dir in "$@"; do
 done
 compgen -G "$site/apt/pool/main/*/*/*.deb" >/dev/null || { echo "no .deb in the tree" >&2; exit 1; }
 compgen -G "$site/rpm/*/*.rpm" >/dev/null || { echo "no .rpm in the tree" >&2; exit 1; }
+
+node "$here/retention.mjs" prune "$site"
 
 # --- apt: Packages per architecture, Release, InRelease, Release.gpg ---------------------------------------------------
 apt_archs="amd64 arm64"
