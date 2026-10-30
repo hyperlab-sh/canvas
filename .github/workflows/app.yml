@@ -82,6 +82,7 @@ jobs:
         run: |
           target="${{ matrix.target }}"
           version="$(node -p "require('./package.json').version")"
+          app_version="$(node scripts/app-assets.mjs version)"
           mkdir -p cli smoke
           apps=()
           if [ "$RUNNER_OS" = Windows ]; then
@@ -97,8 +98,8 @@ jobs:
               fi
             }
             # The NSIS installer installs per user, the MSI per machine; Tauri names both directories after the product.
-            install "canvas-app-$version-$target-setup.exe" exe
-            install "canvas-app-$version-$target.msi" msi
+            install "canvas-app-$app_version-$target-setup.exe" exe
+            install "canvas-app-$app_version-$target.msi" msi
             for entry in "setup:$LOCALAPPDATA/Canvas" "msi:$PROGRAMFILES/Canvas"; do
               dir="${entry#*:}"
               [ -f "$dir/canvas-app.exe" ] || { echo "no $dir/canvas-app.exe after the ${entry%%:*} installer" >&2; ls -R "$LOCALAPPDATA/Canvas" "$PROGRAMFILES/Canvas" 2>&1 | head -30; exit 1; }
