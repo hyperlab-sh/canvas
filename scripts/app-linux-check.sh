@@ -44,13 +44,18 @@ mkdir -p "$HOME"
 pids=()
 # The app and its WebKit helpers keep writing under $HOME (the mesa shader cache) until they have exited, so stop them and
 # wait before removing $work. Nothing here may change the exit status: by now the assertions have decided it.
-app_procs='^(canvas-app|WebKit(Web|Network|GPU)Process)$'
+# pkill and pgrep match the kernel's process name, cut to 15 characters (WebKitWebProces), so the helpers are listed truncated.
+app_procs='^(canvas-app|WebKit(WebProces|NetworkPr|GPUProces))$'
 cleanup() {
   set +e
   pkill -TERM "$app_procs" 2>/dev/null
   for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null; done
   for _ in $(seq 1 50); do pgrep "$app_procs" >/dev/null || break; sleep 0.2; done
   pkill -KILL "$app_procs" 2>/dev/null
+  # Bounded: a service that ignores SIGTERM is killed rather than left to hang the job. dbus-launch's daemon is not our
+  # child, so it is polled here and `wait` cannot see it.
+  for _ in $(seq 1 50); do kill -0 "${pids[@]}" 2>/dev/null || break; sleep 0.2; done
+  kill -KILL "${pids[@]}" 2>/dev/null
   for pid in "${pids[@]}"; do wait "$pid" 2>/dev/null; done
   for _ in 1 2 3 4 5; do rm -rf "$work" 2>/dev/null && break; sleep 1; done
   return 0
