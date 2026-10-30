@@ -80,9 +80,9 @@ export function mergeSums(existing, dir, names) {
   return `${[...kept, ...added].join('\n')}\n`;
 }
 
-/** Tauri `--config` override: the app packages depend on the CLI package of at least this version. */
+/** Tauri `--config` override: the .deb depends on the CLI package of at least this version; the .rpm on the bare name, because Tauri passes an rpm requirement through as a capability name and a versioned one could never be satisfied. */
 export function dependsConfig(cliVersion) {
-  return { bundle: { linux: { deb: { depends: [`canvas (>= ${cliVersion})`] }, rpm: { depends: [`canvas >= ${cliVersion}`] } } } };
+  return { bundle: { linux: { deb: { depends: [`canvas (>= ${cliVersion})`] }, rpm: { depends: ['canvas'] } } } };
 }
 
 export function appVersion() {

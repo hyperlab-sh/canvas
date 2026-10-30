@@ -104,6 +104,6 @@ test('mergeSums appends the app digests and replaces a repeated name', () => {
 
 test('the app packages depend on the CLI package at the same version or newer', () => {
   assert.deepEqual(dependsConfig('0.4.0'), {
-    bundle: { linux: { deb: { depends: ['canvas (>= 0.4.0)'] }, rpm: { depends: ['canvas >= 0.4.0'] } } },
+    bundle: { linux: { deb: { depends: ['canvas (>= 0.4.0)'] }, rpm: { depends: ['canvas'] } } },
   });
 });

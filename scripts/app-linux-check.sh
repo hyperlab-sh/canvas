@@ -31,7 +31,7 @@ echo "::endgroup::"
 [ "$(dpkg-deb -f "$app_deb" Package)" = canvas-app ] || fail "the .deb is not named canvas-app"
 [ "$(dpkg-deb -f "$app_deb" Depends | tr ',' '\n' | grep -c '^ *canvas (>= '"$cli_version"')$')" = 1 ] || fail "the .deb does not say Depends: canvas (>= $cli_version)"
 [ "$(rpm -qp --qf '%{NAME}' "$app_rpm")" = canvas-app ] || fail "the .rpm is not named canvas-app"
-rpm -qpR "$app_rpm" | grep -qxF "canvas >= $cli_version" || fail "the .rpm does not say Requires: canvas >= $cli_version"
+rpm -qpR "$app_rpm" | grep -qxF "canvas" || fail "the .rpm does not say Requires: canvas (the bare name)"
 
 sudo apt-get install -y "$cli_deb" "$app_deb"
 canvas --version
