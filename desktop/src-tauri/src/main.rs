@@ -187,9 +187,8 @@ async fn open_service(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
         let held_file_back = held_file.clone();
         let (port, home) = (state.port, origin(&state));
         // A link supersedes a held file (as in `hold_link`), so the file taken above is dropped on purpose.
-        let url = match (held_link.clone(), held_file) {
-            (Some(link), _) => route::open_url(Some(&link), &home),
-            (None, Some(file)) => {
+        let url = match held_file {
+            Some(file) if held_link.is_none() => {
                 let origin = home.clone();
                 let retry = file.clone();
                 let resolved = tauri::async_runtime::spawn_blocking(move || open_file::resolve(&origin, &file, &open_file::Service(port)))
@@ -205,10 +204,11 @@ async fn open_service(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
                 }
                 resolved.unwrap_or_else(|error| {
                     eprintln!("canvas-app: cannot open {}: {error}", retry.display());
-                    deeplink::home_url(&home)
+                    route::open_url(None, &home)
                 })
             }
-            (None, None) => deeplink::home_url(&home),
+            // A held link, or nothing held (the first load once the service comes up): the tested decision.
+            _ => route::open_url(held_link.as_deref(), &home),
         };
         if let Err(error) = navigate(&app, &url) {
             // Keep what was held for the next attempt.

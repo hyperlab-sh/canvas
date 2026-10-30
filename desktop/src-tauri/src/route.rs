@@ -103,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn smoke_always_loads_the_editor_home_and_holds_nothing() {
+    fn smoke_always_loads_the_editor_and_holds_nothing() {
         for up in [true, false] {
             for cold in [None, Some(link())] {
                 assert_eq!(start_target(true, up, cold.as_ref(), ORIGIN), (Start::External(format!("{ORIGIN}/#/")), None));
