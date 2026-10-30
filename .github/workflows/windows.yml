@@ -80,7 +80,9 @@ jobs:
           $appVersion = node scripts/app-assets.mjs version
           $app = "$env:USERPROFILE\scoop\apps\canvas-app\current\canvas-app.exe"
           if (-not (Test-Path $app)) { Get-ChildItem -Recurse "$env:USERPROFILE\scoop\apps\canvas-app" | Select-Object -First 30 FullName; throw "$app was not installed" }
-          $out = & $app --version
+          # A GUI-subsystem exe, so PowerShell would not wait for it or capture its output through a pipe: redirect to a file.
+          Start-Process -Wait -NoNewWindow -FilePath $app -ArgumentList '--version' -RedirectStandardOutput $env:RUNNER_TEMP\app-version.txt
+          $out = (Get-Content $env:RUNNER_TEMP\app-version.txt -Raw).Trim()
           Write-Output $out
           if ($out -ne "canvas-app $appVersion") { throw "canvas-app --version printed '$out', expected 'canvas-app $appVersion'" }
           # The service package works from the Scoop directory: it finds its app and server next to bin\.
