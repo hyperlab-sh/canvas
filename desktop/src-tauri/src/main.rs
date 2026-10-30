@@ -28,9 +28,9 @@ struct AppState {
     port: u16,
     /// A deep link that arrived while the service was not answering, opened once it is.
     pending: Mutex<Option<String>>,
-    /// Files opened (dropped, associated, argv) while the service was not answering; the newest request
+    /// The file opened (dropped, associated, argv) while the service was not answering; the newest request
     /// replaces any held link and the other way round.
-    pending_files: Mutex<Vec<PathBuf>>,
+    pending_files: Mutex<Option<PathBuf>>,
     /// Set in `--smoke` mode only.
     smoke: Option<smoke::SmokeSender>,
 }
@@ -95,7 +95,7 @@ fn handle_deep_link(app: &AppHandle, link: &str) {
 /// Holds a deep link for the hand-over; it supersedes a held file.
 fn hold_link(app: &AppHandle, url: String) {
     let state = app.state::<AppState>();
-    state.pending_files.lock().unwrap().clear();
+    *state.pending_files.lock().unwrap() = None;
     *state.pending.lock().unwrap() = Some(url);
 }
 
@@ -116,7 +116,7 @@ fn handle_files(app: &AppHandle, paths: Vec<PathBuf>) {
                 route::FileAction::Open => match resolved.expect("resolved while the service answers") {
                     Ok(url) => {
                         *state.pending.lock().unwrap() = None;
-                        state.pending_files.lock().unwrap().clear();
+                        *state.pending_files.lock().unwrap() = None;
                         if let Err(error) = navigate(&on_main, &url) {
                             eprintln!("canvas-app: cannot open {}: {error}", path.display());
                         }
@@ -125,7 +125,7 @@ fn handle_files(app: &AppHandle, paths: Vec<PathBuf>) {
                 },
                 action => {
                     *state.pending.lock().unwrap() = None;
-                    *state.pending_files.lock().unwrap() = vec![path];
+                    *state.pending_files.lock().unwrap() = Some(path);
                     if action == route::FileAction::HoldAndShowBundled {
                         if let Err(error) = navigate(&on_main, nav::bundled_url().as_str()) {
                             eprintln!("canvas-app: cannot show the service page: {error}");
@@ -169,25 +169,38 @@ async fn open_service(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
         return Ok(());
     }
     let held_link = state.pending.lock().unwrap().clone();
-    let held_file = state.pending_files.lock().unwrap().first().cloned();
+    // Taken, so a file that arrives while this one resolves replaces it instead of being overwritten.
+    let held_file = state.pending_files.lock().unwrap().take();
+    let held_file_back = held_file.clone();
     let (port, home) = (state.port, origin(&state));
     let url = match (held_link, held_file) {
         (Some(link), _) => route::open_url(Some(&link), &home),
         (None, Some(file)) => {
             let origin = home.clone();
+            let retry = file.clone();
             let resolved = tauri::async_runtime::spawn_blocking(move || open_file::resolve(&origin, &file, &open_file::Service(port)))
                 .await
                 .map_err(|error| error.to_string())?;
+            // Resolving awaited: a link or drop that moved the window meanwhile wins.
+            if !route::may_hand_over(on_bundled(&app)) {
+                return Ok(());
+            }
             resolved.unwrap_or_else(|error| {
-                eprintln!("canvas-app: cannot open the held file: {error}");
+                eprintln!("canvas-app: cannot open {}: {error}", retry.display());
                 home
             })
         }
         (None, None) => home,
     };
-    navigate(&app, &url)?;
+    if let Err(error) = navigate(&app, &url) {
+        // Keep what was held for the next attempt.
+        if held_file_back.is_some() {
+            *state.pending_files.lock().unwrap() = held_file_back;
+        }
+        return Err(error);
+    }
     *state.pending.lock().unwrap() = None;
-    state.pending_files.lock().unwrap().clear();
+    *state.pending_files.lock().unwrap() = None;
     Ok(())
 }
 
@@ -204,7 +217,7 @@ fn run(smoke_mode: bool) {
     let state = AppState {
         port,
         pending: Mutex::new(None),
-        pending_files: Mutex::new(Vec::new()),
+        pending_files: Mutex::new(None),
         smoke: smoke_mode.then(|| smoke::SmokeSender(Mutex::new(report_sender))),
     };
 
@@ -213,9 +226,10 @@ fn run(smoke_mode: bool) {
         // Registered first (the plugin's rule). With its `deep-link` feature a second launch's link reaches
         // `on_open_url` below, so this callback only brings the window forward and opens files.
         // A second launch's file (an association opens a new process) arrives here as argv.
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             focus(app);
-            handle_files(app, files::from_args(argv.into_iter().skip(1)));
+            // Relative paths are relative to the second launch's directory, not this process's.
+            handle_files(app, files::from_args_in(argv.into_iter().skip(1), std::path::Path::new(&cwd)));
         }));
     }
     let app = builder
@@ -272,7 +286,7 @@ fn run(smoke_mode: bool) {
             };
             *app.state::<AppState>().pending.lock().unwrap() = held;
             if !service_up {
-                *app.state::<AppState>().pending_files.lock().unwrap() = cold_files.into_iter().take(1).collect();
+                *app.state::<AppState>().pending_files.lock().unwrap() = cold_files.into_iter().next();
             }
             let start = match first {
                 route::Start::Bundled => WebviewUrl::App("index.html".into()),

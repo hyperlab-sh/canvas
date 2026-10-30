@@ -45,6 +45,31 @@ fn failure(status: u16, body: &Value) -> String {
     }
 }
 
+/// `POST /projects/<project>/diagrams`: path and body.
+pub fn create_request(project: &str, name: &str) -> (String, Value) {
+    (create_path(project), json!({ "name": name }))
+}
+
+/// `PUT /projects/<project>/diagrams/<id>`: path and body.
+pub fn save_request(project: &str, id: &str, document: &Value, revision: i64) -> (String, Value) {
+    (save_path(project, id), json!({ "document": document, "revision": revision }))
+}
+
+/// The id and revision of the diagram a `POST` created.
+pub fn created(status: u16, body: &Value) -> Result<(String, i64), String> {
+    if status != 201 {
+        return Err(failure(status, body));
+    }
+    let id = body.get("id").and_then(Value::as_str).ok_or("the service created a diagram without an id")?;
+    let revision = body.get("revision").and_then(Value::as_i64).ok_or("the service created a diagram without a revision")?;
+    Ok((id.to_string(), revision))
+}
+
+/// Whether a `PUT` saved.
+pub fn saved(status: u16, body: &Value) -> Result<(), String> {
+    if status == 200 { Ok(()) } else { Err(failure(status, body)) }
+}
+
 impl Backend for Service {
     fn projects(&self) -> Result<Value, String> {
         match http::send(self.0, "GET", "/projects", None)? {
@@ -54,18 +79,15 @@ impl Backend for Service {
     }
 
     fn create(&self, project: &str, name: &str) -> Result<(String, i64), String> {
-        let (status, body) = http::send(self.0, "POST", &create_path(project), Some(&json!({ "name": name })))?;
-        if status != 201 {
-            return Err(failure(status, &body));
-        }
-        let id = body.get("id").and_then(Value::as_str).ok_or("the service created a diagram without an id")?;
-        let revision = body.get("revision").and_then(Value::as_i64).ok_or("the service created a diagram without a revision")?;
-        Ok((id.to_string(), revision))
+        let (path, body) = create_request(project, name);
+        let (status, reply) = http::send(self.0, "POST", &path, Some(&body))?;
+        created(status, &reply)
     }
 
     fn save(&self, project: &str, id: &str, document: &Value, revision: i64) -> Result<(), String> {
-        let (status, body) = http::send(self.0, "PUT", &save_path(project, id), Some(&json!({ "document": document, "revision": revision })))?;
-        if status == 200 { Ok(()) } else { Err(failure(status, &body)) }
+        let (path, body) = save_request(project, id, document, revision);
+        let (status, reply) = http::send(self.0, "PUT", &path, Some(&body))?;
+        saved(status, &reply)
     }
 }
 
@@ -78,6 +100,22 @@ pub fn owner(projects: &Value, folder: &Path, real: impl Fn(&Path) -> Option<Pat
         let path = project.get("path")?.as_str()?;
         (real(Path::new(path))? == folder).then(|| name.to_string())
     })
+}
+
+/// Whether the service lists a diagram `id` in `project`, and, when the listing names the file it was read
+/// from (`file` or `path`), whether that is `file`. The service skips files it does not scan (a different
+/// suffix case) and serves only one file of a duplicated id, so a path alone does not make it listed.
+pub fn lists(projects: &Value, project: &str, id: &str, file: &Path, real: impl Fn(&Path) -> Option<PathBuf>) -> bool {
+    let Some(entries) = projects.as_array().and_then(|all| all.iter().find(|candidate| candidate.get("name").and_then(Value::as_str) == Some(project))).and_then(|found| found.get("diagrams")).and_then(Value::as_array) else {
+        return false;
+    };
+    let Some(entry) = entries.iter().find(|entry| entry.get("id").and_then(Value::as_str) == Some(id)) else {
+        return false;
+    };
+    match entry.get("file").or_else(|| entry.get("path")).and_then(Value::as_str) {
+        Some(listed) => matches!((real(Path::new(listed)), real(file)), (Some(a), Some(b)) if a == b),
+        None => true,
+    }
 }
 
 fn real_path(path: &Path) -> Option<PathBuf> {
@@ -101,13 +139,17 @@ fn open_diagram(origin: &str, path: &Path, backend: &dyn Backend) -> Result<Stri
         .ok_or_else(|| format!("{} is not a diagram file (no \"id\")", path.display()))?;
 
     let folder = path.parent().filter(|parent| !parent.as_os_str().is_empty()).unwrap_or(Path::new("."));
-    if let Some(project) = owner(&backend.projects()?, folder, real_path) {
-        return Ok(editor_url(origin, &OpenTarget { project, id: id.to_string() }));
+    let projects = backend.projects()?;
+    if let Some(project) = owner(&projects, folder, real_path) {
+        if lists(&projects, &project, id, path, real_path) {
+            return Ok(editor_url(origin, &OpenTarget { project, id: id.to_string() }));
+        }
     }
 
     let name = document.get("name").and_then(Value::as_str).map(str::trim).filter(|name| !name.is_empty()).map_or_else(|| files::title(path), str::to_string);
     let (new_id, revision) = backend.create(SCRATCH, &name)?;
-    backend.save(SCRATCH, &new_id, &with_id(&document, &new_id), revision)?;
+    // There is no DELETE route: a rejected document leaves the empty diagram behind, so say which one.
+    backend.save(SCRATCH, &new_id, &with_id(&document, &new_id), revision).map_err(|error| format!("created {SCRATCH}/{new_id} but could not save it: {error}"))?;
     Ok(editor_url(origin, &OpenTarget { project: SCRATCH.to_string(), id: new_id }))
 }
 
@@ -179,9 +221,50 @@ mod tests {
     fn a_file_in_a_project_opens_in_place_without_importing() {
         let dir = tempfile::tempdir().unwrap();
         let file = write(dir.path(), "flow.openflow.json", r#"{"id":"abc","name":"Flow"}"#);
-        let backend = fake_with(json!([{ "name": "work", "path": dir.path(), "diagrams": [] }]));
+        let backend = fake_with(listed(dir.path(), "abc"));
         assert_eq!(resolve(ORIGIN, &file, &backend).unwrap(), "http://127.0.0.1:43120/#/p/work/abc");
         assert_eq!(*backend.calls.borrow(), ["projects"]);
+    }
+
+    fn listed(dir: &Path, id: &str) -> Value {
+        json!([{ "name": "work", "path": dir, "diagrams": [{ "id": id, "title": "T" }] }])
+    }
+
+    #[test]
+    fn a_file_in_a_project_opens_in_place_only_when_the_service_lists_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write(dir.path(), "flow.openflow.json", r#"{"id":"abc"}"#);
+        let backend = fake_with(listed(dir.path(), "abc"));
+        assert_eq!(resolve(ORIGIN, &file, &backend).unwrap(), "http://127.0.0.1:43120/#/p/work/abc");
+    }
+
+    #[test]
+    fn an_upper_case_suffix_the_service_does_not_scan_is_imported() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write(dir.path(), "A.OpenFlow.JSON", r#"{"id":"abc"}"#);
+        let backend = fake_with(json!([{ "name": "work", "path": dir.path(), "diagrams": [] }]));
+        assert_eq!(resolve(ORIGIN, &file, &backend).unwrap(), format!("{ORIGIN}/#/p/{SCRATCH}/new-id"));
+        assert_eq!(*backend.calls.borrow(), ["projects", "create scratch A", "save scratch new-id"]);
+    }
+
+    #[test]
+    fn an_id_the_listing_does_not_contain_is_imported() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write(dir.path(), "a.openflow.json", r#"{"id":"abc"}"#);
+        let backend = fake_with(listed(dir.path(), "other"));
+        assert_eq!(resolve(ORIGIN, &file, &backend).unwrap(), format!("{ORIGIN}/#/p/{SCRATCH}/new-id"));
+        assert_eq!(backend.calls.borrow().len(), 3);
+    }
+
+    #[test]
+    fn a_listing_that_names_another_file_for_the_id_means_a_duplicate_and_is_imported() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = write(dir.path(), "first.openflow.json", r#"{"id":"abc"}"#);
+        let second = write(dir.path(), "second.openflow.json", r#"{"id":"abc"}"#);
+        let projects = json!([{ "name": "work", "path": dir.path(), "diagrams": [{ "id": "abc", "file": first }] }]);
+        assert_eq!(resolve(ORIGIN, &first, &fake_with(projects.clone())).unwrap(), "http://127.0.0.1:43120/#/p/work/abc");
+        let backend = fake_with(projects);
+        assert_eq!(resolve(ORIGIN, &second, &backend).unwrap(), format!("{ORIGIN}/#/p/{SCRATCH}/new-id"));
     }
 
     #[test]
@@ -194,7 +277,7 @@ mod tests {
             let link = dir.path().join("link");
             std::os::unix::fs::symlink(&real, &link).unwrap();
             let file = write(&real, "a.openflow.json", r#"{"id":"x"}"#);
-            let backend = fake_with(json!([{ "name": "linked", "path": link }]));
+            let backend = fake_with(json!([{ "name": "linked", "path": link, "diagrams": [{ "id": "x" }] }]));
             assert_eq!(resolve(ORIGIN, &file, &backend).unwrap(), "http://127.0.0.1:43120/#/p/linked/x");
         }
     }
@@ -203,7 +286,7 @@ mod tests {
     fn ids_and_projects_are_encoded_in_the_route() {
         let dir = tempfile::tempdir().unwrap();
         let file = write(dir.path(), "a.openflow.json", r#"{"id":"a b/c"}"#);
-        let backend = fake_with(json!([{ "name": "my proj", "path": dir.path() }]));
+        let backend = fake_with(json!([{ "name": "my proj", "path": dir.path(), "diagrams": [{ "id": "a b/c" }] }]));
         assert_eq!(resolve(ORIGIN, &file, &backend).unwrap(), "http://127.0.0.1:43120/#/p/my%20proj/a%20b%2Fc");
     }
 
@@ -233,7 +316,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = write(dir.path(), "a.openflow.json", r#"{"id":"old"}"#);
         let backend = Fake { projects: json!([]), fail_save: true, ..Default::default() };
-        assert_eq!(resolve(ORIGIN, &file, &backend), Err("boom".into()));
+        assert_eq!(resolve(ORIGIN, &file, &backend), Err("created scratch/new-id but could not save it: boom".into()));
     }
 
     #[test]
@@ -297,6 +380,35 @@ mod tests {
     fn request_paths_encode_each_segment() {
         assert_eq!(create_path("my proj"), "/projects/my%20proj/diagrams");
         assert_eq!(save_path("p", "a/b"), "/projects/p/diagrams/a%2Fb");
+    }
+
+    #[test]
+    fn requests_carry_the_keys_the_service_reads() {
+        assert_eq!(create_request("my proj", "Flow"), ("/projects/my%20proj/diagrams".to_string(), json!({ "name": "Flow" })));
+        let document = json!({ "id": "i" });
+        assert_eq!(save_request("p", "i", &document, 3), ("/projects/p/diagrams/i".to_string(), json!({ "document": { "id": "i" }, "revision": 3 })));
+    }
+
+    #[test]
+    fn replies_are_read_by_status() {
+        assert_eq!(created(201, &json!({ "id": "n", "revision": 2 })), Ok(("n".into(), 2)));
+        assert!(created(200, &json!({ "id": "n", "revision": 2 })).is_err());
+        assert!(created(201, &json!({ "revision": 2 })).is_err());
+        assert!(created(201, &json!({ "id": "n" })).is_err());
+        assert_eq!(created(404, &json!({ "error": "no such project" })), Err("the service answered 404: no such project".into()));
+        assert_eq!(saved(200, &Value::Null), Ok(()));
+        assert_eq!(saved(400, &json!({ "message": "bad schema" })), Err("the service answered 400: bad schema".into()));
+        assert_eq!(saved(500, &Value::Null), Err("the service answered 500".into()));
+    }
+
+    #[test]
+    fn a_failed_save_names_the_orphan() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write(dir.path(), "a.openflow.json", r#"{"id":"old"}"#);
+        let backend = Fake { projects: json!([]), fail_save: true, ..Default::default() };
+        let error = resolve(ORIGIN, &file, &backend).unwrap_err();
+        assert!(error.contains("scratch/new-id"), "{error}");
+        assert!(backend.saved.borrow().is_empty());
     }
 
     #[test]

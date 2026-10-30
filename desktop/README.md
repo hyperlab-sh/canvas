@@ -25,12 +25,20 @@ it shows `http://127.0.0.1:<port>`, where `canvas serve` (or `canvas service ins
     same file twice imports it twice) and opened.
   - `*.openflow` (OpenFlow DSL) and `*.mmd` (Mermaid) open as a new diagram titled by the file name, through the
     editor's `#/from/dsl` route; the file must be UTF-8 text of at most 1 MB.
+  - A file inside a project folder opens in place only if the service lists a diagram with that id there;
+    otherwise (a suffix in another case, an id another file already holds) it is imported like any other.
   - Other files are ignored. The drop is handled natively, so the page never receives the file and the window
     never navigates to it. With the service down the file is held and opens once it answers.
-  - A file that cannot be opened (not a diagram, rejected by the service) is reported on stderr only.
+  - **Known loss:** because the page receives no drops, the editor's own drop targets do not work in the app:
+    the home page's drop-to-import and the agent panel's image drop. Use the editor's import button, or drop a
+    diagram file on the window.
+  - A file that cannot be opened (not a diagram, rejected by the service) is reported on stderr only; a
+    follow-up should show it in the window. If the service rejects an import after creating its diagram, the
+    message names the empty diagram left in `scratch` (the service has no delete route).
   - Associations: Linux registers all three globs (`share/mime/packages/canvas-app.xml`, `Exec=... %U`). macOS and
     Windows only match the last extension of a name, so there `.openflow` and `.mmd` are associated and
-    `.openflow.json` opens by drop, "Open With", `open -a Canvas f` or `canvas open`.
+    `.openflow.json` opens by drop, "Open With", `open -a Canvas f` or `canvas open`. The AppImage registers no
+    file association.
 - **Downloads:** exports are saved in the OS Downloads folder (created if missing), never overwriting a file
   (`name (1).png`). macOS asks once whether Canvas may access Downloads.
 

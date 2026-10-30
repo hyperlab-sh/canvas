@@ -7,7 +7,8 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-const TIMEOUT: Duration = Duration::from_secs(10);
+/// Loopback answers in milliseconds; a short bound keeps a wedged service from stalling a cold start.
+const TIMEOUT: Duration = Duration::from_secs(2);
 /// Largest reply read; a project listing is the biggest one the app asks for.
 const MAX_REPLY: u64 = 16 * 1024 * 1024;
 
