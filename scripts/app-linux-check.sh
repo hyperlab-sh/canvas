@@ -74,7 +74,12 @@ sample="$work/open.openflow.json"
 cat > "$sample" <<'JSON'
 {"id":"d14-open","name":"d14 xdg-open","nodes":[],"edges":[]}
 JSON
-echo "mime type: $(xdg-mime query filetype "$sample")"
+# Without a desktop environment xdg-open types files with file(1) (application/json) and starts a browser; saying GNOME makes
+# it use gio, which reads the shared-mime-info glob like a real desktop does.
+export XDG_CURRENT_DESKTOP=GNOME DESKTOP_SESSION=gnome
+content_type="$(gio info -a standard::content-type "$sample" | sed -n 's/^ *standard::content-type: //p')"
+echo "mime type: $content_type"
+[ "$content_type" = application/x-openflow+json ] || fail "$sample is typed $content_type, not application/x-openflow+json"
 [ "$(xdg-mime query default application/x-openflow+json)" = "$(basename "$desktop")" ] || fail "application/x-openflow+json does not default to $(basename "$desktop")"
 
 # The shim is first on PATH so the desktop entry's `Exec=canvas-app %U` runs it: it records the arguments and the app's stderr.
@@ -95,7 +100,7 @@ wait_for_title() {
 }
 
 echo "::group::xdg-open"
-PATH="$work/shim:$PATH" xdg-open "$sample"
+PATH="$work/shim:$PATH" timeout 30 xdg-open "$sample"
 wait_for_title "d14 xdg-open"
 cat "$work/app.log"
 grep -q "open.openflow.json" "$work/app.log" || fail "xdg-open did not hand the file to the app"
