@@ -1,0 +1,129 @@
+name: Homebrew
+
+# Installs the formula (Linux x64, Linux arm64, macOS) and the canvas-app cask (macOS) from a local tap, rendered by the same
+# scripts the release uses against the dry-run assets, which a local file server stands in for. Called by ci.yml (every PR)
+# and release.yml (before the tap is pushed); it never publishes. Needs the caller's "release" and "app" artifacts.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  formula:
+    name: formula (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The "app" artifact's SHA256SUMS lists the archives too.
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: assets
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: assets
+
+      - name: Put brew on PATH
+        run: |
+          if ! command -v brew > /dev/null; then
+            for prefix in /home/linuxbrew/.linuxbrew /opt/homebrew /usr/local; do [ -x "$prefix/bin/brew" ] && eval "$("$prefix/bin/brew" shellenv)" && break; done
+          fi
+          # Linux arm64 images do not ship Homebrew.
+          if ! command -v brew > /dev/null; then
+            NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          fi
+          brew --version
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+          echo "HOMEBREW_NO_AUTO_UPDATE=1" >> "$GITHUB_ENV"
+          echo "HOMEBREW_NO_INSTALL_CLEANUP=1" >> "$GITHUB_ENV"
+
+      - name: brew install and brew test
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          python3 -m http.server 8000 --bind 127.0.0.1 --directory assets > "$RUNNER_TEMP/server.log" 2>&1 &
+          trap 'kill $!' EXIT
+          curl -fsS --retry 30 --retry-connrefused --retry-delay 1 -o /dev/null http://127.0.0.1:8000/SHA256SUMS
+          brew tap-new --no-git hyperlab-sh/tap
+          brew trust hyperlab-sh/tap 2> /dev/null || true
+          tap="$(brew --repository hyperlab-sh/tap)"
+          mkdir -p "$tap/Formula"
+          node scripts/render-formula.mjs "$version" assets --base http://127.0.0.1:8000 > "$tap/Formula/canvas.rb"
+          brew install hyperlab-sh/tap/canvas
+          brew test hyperlab-sh/tap/canvas
+          canvas --version
+
+  cask:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: assets
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: assets
+
+      - name: Audit the cask
+        run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          brew tap-new --no-git hyperlab-sh/tap
+          tap="$(brew --repository hyperlab-sh/tap)"
+          mkdir -p "$tap/Casks"
+          node scripts/render-cask.mjs "$(node scripts/app-assets.mjs version)" assets > "$tap/Casks/canvas-app.rb"
+          # Current Homebrew's style rules reject `postflight` (A5 needs it: there is no quarantine step in postflight_steps)
+          # and ask for `depends_on :macos`, which older Homebrew does not know. Reported, not gating; audit gates.
+          brew style --cask hyperlab-sh/tap/canvas-app || echo "::warning::brew style findings on the cask (see the log)"
+          brew trust hyperlab-sh/tap 2> /dev/null || true
+          brew audit --cask hyperlab-sh/tap/canvas-app
+
+      # --quarantine marks the download the way a user's install would, so the postflight has something to remove.
+      - name: Install the cask, check the quarantine, smoke the app
+        run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1
+          version="$(node -p "require('./package.json').version")"
+          app_version="$(node scripts/app-assets.mjs version)"
+          python3 -m http.server 8000 --bind 127.0.0.1 --directory assets > "$RUNNER_TEMP/server.log" 2>&1 &
+          trap 'kill $!' EXIT
+          curl -fsS --retry 30 --retry-connrefused --retry-delay 1 -o /dev/null http://127.0.0.1:8000/SHA256SUMS
+          tap="$(brew --repository hyperlab-sh/tap)"
+          mkdir -p "$tap/Formula"
+          node scripts/render-formula.mjs "$version" assets --base http://127.0.0.1:8000 > "$tap/Formula/canvas.rb"
+          node scripts/render-cask.mjs "$app_version" assets --base http://127.0.0.1:8000 > "$tap/Casks/canvas-app.rb"
+          brew install --cask --quarantine hyperlab-sh/tap/canvas-app
+          brew list --formula canvas
+
+          app=/Applications/Canvas.app
+          test -d "$app"
+          xattr -r "$app" || true
+          if xattr -r "$app" | grep -q com.apple.quarantine; then echo "$app is still quarantined" >&2; exit 1; fi
+
+          export OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json"
+          "$(brew --prefix)/bin/canvas" serve --port 43120 &
+          trap 'kill $!' EXIT
+          curl -fsS --retry 30 --retry-connrefused --retry-delay 1 -o /dev/null http://127.0.0.1:43120/health
+          "$app/Contents/MacOS/canvas-app" --version
+          "$app/Contents/MacOS/canvas-app" --smoke | tee "$RUNNER_TEMP/smoke.json"
+          node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8").trim().split("\n").pop()); if (!r.ok || !r.mounted) { console.error("the editor did not mount"); process.exit(1); }' "$RUNNER_TEMP/smoke.json"

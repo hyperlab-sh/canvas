@@ -25,6 +25,7 @@ else on your machine decides which runtime runs the service.
 | | Command | Platforms |
 |---|---|---|
 | Homebrew | `brew install hyperlab-sh/tap/canvas` | macOS, Linux |
+| Homebrew cask (desktop app) | `brew install --cask hyperlab-sh/tap/canvas-app` | macOS |
 | Install script | `curl -fsSL https://raw.githubusercontent.com/hyperlab-sh/canvas/main/install.sh \| sh` | macOS, Linux (x64, arm64; not Alpine/musl) |
 | PowerShell | `irm https://raw.githubusercontent.com/hyperlab-sh/canvas/main/install.ps1 \| iex` | Windows x64 |
 | npm | `npm i -g @hyperlab.sh/canvas` | needs Node 20.11 or newer |
@@ -172,7 +173,7 @@ then:
 
 1. builds the standalone binaries for macOS, Linux and Windows (`scripts/package-native.mjs`, needs bun) and attaches
    them, with `SHA256SUMS`, to a GitHub release;
-2. renders the Homebrew formula (`scripts/render-formula.mjs`) and pushes it to `hyperlab-sh/homebrew-tap` when the
+2. renders the Homebrew formula and the `canvas-app` cask (`scripts/render-formula.mjs`, `scripts/render-cask.mjs`) and pushes them to `hyperlab-sh/homebrew-tap` when the
    `HOMEBREW_TAP_DEPLOY_KEY` secret (a write deploy key on the tap) is set;
 3. publishes the npm package through npm trusted publishing (the repo and `release.yml` are registered as the trusted
    publisher on npmjs.com, so no token is stored) with provenance.
