@@ -106,6 +106,12 @@ jobs:
     needs: [native, app]
     uses: ./.github/workflows/brew.yml
 
+  # Dry run of the repository publish: adds the packages to the apt and yum trees of gh-pages, signs them with a throwaway key,
+  # serves the result locally and installs canvas and canvas-app from it in clean containers; pushes nothing.
+  repos:
+    needs: [packages, app]
+    uses: ./.github/workflows/repos.yml
+
   # Dry run of the image publish: builds both architectures from the release archives and checks /health; pushes nothing.
   docker:
     needs: native

@@ -1,0 +1,120 @@
+name: Package repositories
+
+# Adds the canvas and canvas-app .deb and .rpm to the apt and yum/dnf trees of the gh-pages branch, signs them, and installs
+# from the result in clean distro containers with signature checks on. Called by ci.yml (every PR) and release.yml; it never
+# publishes: the release workflow pushes the "repos" artifact to gh-pages. Needs the caller's "packages" and "app" artifacts.
+on:
+  workflow_call:
+    inputs:
+      release:
+        description: Sign with the release key (REPO_GPG_PRIVATE_KEY); otherwise with a throwaway key
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: in/packages
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: in/app
+
+      - name: Install the repository tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-utils createrepo-c rpm gnupg dpkg-dev
+
+      # The tree to extend: prior versions stay in it.
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+
+      - name: Build and sign the trees
+        env:
+          REPO_BASE_URL: https://hyperlab-sh.github.io/canvas
+          REPO_GPG_PRIVATE_KEY: ${{ inputs.release && secrets.REPO_GPG_PRIVATE_KEY || '' }}
+          REPO_EPHEMERAL_KEY: ${{ inputs.release && '0' || '1' }}
+          # D8: the release key. A release run refuses any other.
+          REPO_EXPECT_FPR: ${{ inputs.release && 'CBE706A42B7AED6141667D695239F12AF24A7030' || '' }}
+        run: packaging/repos/build.sh site in/packages in/app
+
+      - name: The trees carry both packages for both architectures
+        run: |
+          cli="$(node -p "require('./package.json').version")"
+          app="$(node scripts/app-assets.mjs version)"
+          for f in "apt/pool/main/c/canvas/canvas_${cli}_amd64.deb" "apt/pool/main/c/canvas/canvas_${cli}_arm64.deb" \
+                   "apt/pool/main/c/canvas-app/canvas-app_${app}_amd64.deb" "apt/pool/main/c/canvas-app/canvas-app_${app}_arm64.deb" \
+                   "rpm/x86_64/canvas-${cli}-1.x86_64.rpm" "rpm/aarch64/canvas-${cli}-1.aarch64.rpm" \
+                   "rpm/x86_64/canvas-app-${app}-1.x86_64.rpm" "rpm/aarch64/canvas-app-${app}-1.aarch64.rpm" \
+                   apt/dists/stable/InRelease apt/dists/stable/Release.gpg rpm/x86_64/repodata/repomd.xml.asc rpm/aarch64/repodata/repomd.xml.asc \
+                   canvas.asc canvas-archive-keyring.gpg canvas.repo; do
+            test -s "site/$f" || { echo "missing $f" >&2; exit 1; }
+          done
+
+      - name: C-7, no verification is turned off
+        run: |
+          # The bracketed characters keep this line from matching its own pattern in the repository-wide check.
+          ! grep -rnE 'trusted=y[e]s|gpgcheck=[0]|--no-gpg-checks|--nogpgcheck|allow-insecure|AllowInsecure' site/canvas.repo packaging/repos
+
+      # The tree without the checkout's .git; .nojekyll is a hidden file.
+      - name: Copy the tree out
+        run: mkdir out && tar -C site --exclude=.git -cf - . | tar -C out -xf -
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: repos
+          path: out
+          include-hidden-files: true
+          if-no-files-found: error
+
+  install:
+    needs: build
+    name: install (${{ matrix.image }}, ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        image: [debian:stable, ubuntu:24.04, fedora:latest, opensuse/tumbleweed]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: repos
+          path: site
+
+      # The container reaches the server on the runner through the host network, so the documented commands run unchanged
+      # with a local site URL.
+      - name: Add the repository and install in a clean container
+        run: |
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory site >"$RUNNER_TEMP/server.log" 2>&1 &
+          for _ in $(seq 1 20); do curl -fs -o /dev/null http://127.0.0.1:8080/canvas.asc && break; sleep 0.5; done
+          cli="$(node -p "require('./package.json').version")"
+          app="$(node scripts/app-assets.mjs version)"
+          docker run --rm --network host -v "$PWD/packaging/repos:/repos:ro" "${{ matrix.image }}" sh /repos/test-install.sh http://127.0.0.1:8080 /repos "$cli" "$app"
