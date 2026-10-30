@@ -168,4 +168,12 @@ mod tests {
         assert_eq!(after_resolve(true, false, true), Resolved::Retry);
         assert_eq!(after_resolve(true, false, false), Resolved::Navigate);
     }
+
+    #[test]
+    fn the_home_link_routes_like_any_other_link() {
+        let url = crate::deeplink::link_url(ORIGIN, &crate::deeplink::Link::Home);
+        assert_eq!(after_link(true, false, url.clone()), LinkAction::Navigate(format!("{ORIGIN}/")));
+        assert_eq!(after_link(false, true, url.clone()), LinkAction::HoldOnly(format!("{ORIGIN}/")));
+        assert_eq!(after_link(false, false, url), LinkAction::HoldAndShowBundled(format!("{ORIGIN}/")));
+    }
 }

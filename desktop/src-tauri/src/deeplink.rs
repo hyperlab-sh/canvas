@@ -1,4 +1,5 @@
-//! `canvas://open/<project>/<id>` (percent-encoded segments) to the editor's route `/#/p/<project>/<id>`.
+//! `canvas://open/<project>/<id>` (percent-encoded segments) to the editor's route `/#/p/<project>/<id>`,
+//! and `canvas://home` (or the bare `canvas://`) to the editor's home page.
 
 use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 
@@ -33,6 +34,32 @@ pub fn parse(link: &str) -> Option<OpenTarget> {
     // A trailing slash is fine; another segment is not.
     let tail: Vec<&str> = parts.collect();
     (tail.is_empty() || tail == [""]).then_some(OpenTarget { project, id })
+}
+
+/// A link the app accepts.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Link {
+    Open(OpenTarget),
+    Home,
+}
+
+/// Parses any accepted link: `canvas://home` and the bare `canvas://` (a query, fragment or one trailing
+/// slash is ignored) are the home page; otherwise as `parse`.
+pub fn parse_link(link: &str) -> Option<Link> {
+    let rest = link.strip_prefix("canvas://")?;
+    let rest = rest.split(['?', '#']).next()?;
+    if matches!(rest.strip_suffix('/').unwrap_or(rest), "" | "home") {
+        return Some(Link::Home);
+    }
+    parse(link).map(Link::Open)
+}
+
+/// The editor URL of a link.
+pub fn link_url(origin: &str, link: &Link) -> String {
+    match link {
+        Link::Open(target) => editor_url(origin, target),
+        Link::Home => format!("{origin}/"),
+    }
 }
 
 /// The editor URL for a target, as `lib/open.js` builds it.
@@ -74,7 +101,6 @@ mod tests {
     fn rejects_other_shapes() {
         for bad in [
             "",
-            "canvas://",
             "canvas://open",
             "canvas://open/",
             "canvas://open/p",
@@ -94,6 +120,29 @@ mod tests {
         ] {
             assert_eq!(parse(bad), None, "{bad:?}");
         }
+    }
+
+    #[test]
+    fn parse_still_refuses_the_home_link() {
+        assert_eq!(parse("canvas://"), None);
+        assert_eq!(parse("canvas://home"), None);
+    }
+
+    #[test]
+    fn the_home_link_is_canvas_home_or_the_bare_scheme() {
+        for good in ["canvas://home", "canvas://", "canvas://home/", "canvas://home?x=1", "canvas://home#f", "canvas:///"] {
+            assert_eq!(parse_link(good), Some(Link::Home), "{good:?}");
+        }
+        assert_eq!(parse_link("canvas://open/p/i"), Some(Link::Open(OpenTarget { project: "p".into(), id: "i".into() })));
+        for bad in ["", "canvas:home", "canvas://homes", "canvas://home/x", "canvas://other", "canvas://open", "http://home", "canvas://open/p"] {
+            assert_eq!(parse_link(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn the_home_link_shows_the_service_origin() {
+        assert_eq!(link_url("http://127.0.0.1:43120", &Link::Home), "http://127.0.0.1:43120/");
+        assert_eq!(link_url("http://127.0.0.1:43120", &parse_link("canvas://open/a/b").unwrap()), "http://127.0.0.1:43120/#/p/a/b");
     }
 
     #[test]

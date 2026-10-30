@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { APP_HOME_URL, appInstalled, appUrl, browserCommand, diagramUrl, installHint, linuxManagers, parseOpenArgs, probeResult, resolveTarget, runOpen } from '../lib/open.js';
+import { appInstalled, appUrl, browserCommand, diagramUrl, installHint, linuxManagers, parseOpenArgs, probeResult, resolveTarget, runOpen } from '../lib/open.js';
 
 const BASE = 'http://127.0.0.1:43120';
 
@@ -253,7 +253,7 @@ describe('runOpen', () => {
   it('--app without a diagram opens the app on its home page', async () => {
     const h = harness({ detectApp: () => true });
     assert.equal(await h.run(['--app']), 0);
-    assert.deepEqual(h.calls.opened, [['open', APP_HOME_URL]]);
+    assert.deepEqual(h.calls.opened, [['open', 'canvas://home']]);
     assert.deepEqual(h.calls.fetch, [`${BASE}/health`]);
     assert.equal(await h.run(['--app', '--help']), 0);
   });
@@ -283,7 +283,7 @@ describe('runOpen', () => {
   });
   for (const [platform, managers, expected, absent] of [
     ['darwin', [], ['brew install --cask hyperlab-sh/tap/canvas-app'], ['apt', 'scoop']],
-    ['win32', [], ['scoop install canvas-app'], ['brew', 'apt install']],
+    ['win32', [], ['scoop bucket add hyperlab https://github.com/hyperlab-sh/homebrew-tap', 'scoop install canvas-app'], ['brew install', 'apt install']],
     ['linux', ['apt'], ['sudo apt install canvas-app'], ['dnf install', 'zypper install', 'brew']],
     ['linux', ['dnf'], ['sudo dnf install canvas-app'], ['apt install', 'zypper install']],
     ['linux', ['zypper'], ['sudo zypper install canvas-app'], ['apt install', 'dnf install']],
@@ -298,6 +298,7 @@ describe('runOpen', () => {
         for (const command of expected) assert.ok(text.includes(command), `${command} in ${text}`);
         for (const other of absent) assert.ok(!text.includes(other), `${other} not in ${text}`);
         assert.ok(text.includes('https://github.com/hyperlab-sh/canvas/releases'));
+        assert.equal(text.includes('https://github.com/hyperlab-sh/canvas#linux'), platform === 'linux');
       }
       assert.deepEqual(h.calls.opened, []);
     });
