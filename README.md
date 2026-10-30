@@ -33,11 +33,12 @@ the service. Only npm and bun use yours.
 
 ```sh
 brew install hyperlab-sh/tap/canvas                      # CLI and service (the app is a separate cask)
-brew install --cask hyperlab-sh/tap/canvas-app           # desktop app (installs the formula too)
+brew install --cask hyperlab-sh/tap/canvas-app           # desktop app (install the formula first)
 ```
 
-`brew search` does not list the cask until it is installed by its full name or the tap is trusted; use the full-name
-commands above rather than `brew trust`.
+Install them in this order. The cask alone fails on a fresh machine: Homebrew trusts only the item you name, not the
+formula the cask depends on. `brew search` does not list the cask until it is installed by its full name or the tap is
+trusted; use the full-name commands above rather than `brew trust`.
 
 Or download `canvas-app-<version>-darwin-arm64.dmg` (Apple silicon) or `-darwin-x64.dmg` (Intel) from the
 [releases page](https://github.com/hyperlab-sh/canvas/releases) and drag Canvas to Applications.
