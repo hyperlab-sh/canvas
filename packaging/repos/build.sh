@@ -10,7 +10,8 @@
 #   REPO_EXPECT_FPR       optional: refuse a key with another fingerprint
 #   REPO_BASE_URL         the site URL written into canvas.repo
 # Retention: the newest 3 versions of each package for each architecture stay in the pools (retention.mjs); older ones are deleted
-# before the metadata is regenerated, so the site stays far below the 1 GB Pages limit and git history grows by the newest only.
+# before the metadata is regenerated, so the site stays far below the 1 GB Pages limit. The release workflow publishes gh-pages as one parentless commit, so the
+# branch keeps no history either: pruned packages leave the repository with the commit that drops them.
 # Needs node, apt-ftparchive (apt-utils), dpkg-deb, createrepo_c, rpm (rpmsign), gpg, gzip.
 set -euo pipefail
 

@@ -67,6 +67,10 @@ export function problems(before, after, keep = KEEP_VERSIONS) {
     if (present.has(file)) continue;
     // Allowed only when the package is at its limit and every kept version is newer.
     const p = parsePackage(file);
+    if (!p) {
+      found.push(`${file} disappeared`);
+      continue;
+    }
     const kept = after.map((f) => ({ f, p: parsePackage(f) })).filter((x) => x.p && x.p.kind === p.kind && x.p.name === p.name && x.p.arch === p.arch);
     if (kept.length !== keep || kept.some((x) => compareVersions(x.p.version, p.version) <= 0)) found.push(`${file} disappeared`);
   }
