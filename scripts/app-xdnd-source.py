@@ -2,7 +2,8 @@
 """A GTK drag source for CI: a window that offers one file URI, so xdotool can drag it onto the app (XDND).
 
 usage: app-xdnd-source.py <file URI> <x> <y>
-Prints "ready" once its window is mapped at (x, y) and "drag-end" when a drag from it finished, then exits.
+Prints "ready" once its window is mapped at (x, y) and "drag-end" when a drag from it finished, then exits;
+the CI script requires both.
 """
 import sys
 

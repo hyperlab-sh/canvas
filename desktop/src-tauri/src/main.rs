@@ -313,7 +313,11 @@ fn run(smoke_mode: bool) {
             }
             let start = match first {
                 route::Start::Bundled => WebviewUrl::App("index.html".into()),
-                route::Start::External(url) => WebviewUrl::External(Url::parse(&url).expect("an origin plus a route")),
+                route::Start::External(url) => {
+                    // Same line as `navigate`, so a cold start is as traceable as a warm one (the query carries diagram text).
+                    eprintln!("canvas-app: showing {}", url.split('?').next().unwrap_or_default());
+                    WebviewUrl::External(Url::parse(&url).expect("an origin plus a route"))
+                }
             };
 
             if smoke_mode && !service_up {
