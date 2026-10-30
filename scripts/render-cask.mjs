@@ -28,6 +28,8 @@ cask "canvas-app" do
 
   # The app is only a window onto the service the formula installs.
   depends_on formula: "hyperlab-sh/tap/canvas"
+  # Keeps Linuxbrew out. Not a floor: Homebrew supports only recent macOS and rejects the old minimum versions.
+  depends_on :macos
 
   app "Canvas.app"
 

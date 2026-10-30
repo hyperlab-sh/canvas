@@ -234,12 +234,7 @@ jobs:
           name: release
           path: release
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: packages
-          path: release
-
-      # Last, so its SHA256SUMS (which also lists the app bundles) is the one read.
+      # Last, so its SHA256SUMS (which also lists the archives and the app bundles) is the one read.
       - uses: actions/download-artifact@v4
         with:
           name: app
