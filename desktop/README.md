@@ -45,7 +45,7 @@ it shows `http://127.0.0.1:<port>`, where `canvas serve` (or `canvas service ins
 ## Flags
 
 ```
-canvas-app --version   # canvas-app 0.4.0
+canvas-app --version   # canvas-app 0.4.1
 canvas-app --smoke     # one JSON line, exit 0 when the editor mounted, 1 when it did not within 30 s
 ```
 
