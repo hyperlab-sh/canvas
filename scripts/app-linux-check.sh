@@ -39,7 +39,7 @@ canvas --version
 canvas-app --version
 
 work="$(mktemp -d)"
-export CANVAS_SERVICE_CONFIG="$work/service.json"
+export OPENFLOWKIT_SERVICE_CONFIG="$work/service.json"
 export HOME="$work/home"
 mkdir -p "$HOME"
 pids=()
@@ -99,7 +99,7 @@ echo "desktop entry: $desktop"; cat "$desktop"
 sudo update-desktop-database /usr/share/applications
 sample="$work/open.openflow.json"
 cat > "$sample" <<'JSON'
-{"format":"canvas.scene","schemaVersion":1,"id":"d14-open","name":"d14 xdg-open","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","pages":[{"id":"d14-open:page-1","name":"Page 1","diagramKind":"flowchart","layers":[{"id":"default","name":"Default","visible":true,"locked":false}],"nodes":[],"connectors":[],"metadata":{},"extensions":{}}],"metadata":{},"extensions":{}}
+{"format":"openflowkit.scene","schemaVersion":1,"id":"d14-open","name":"d14 xdg-open","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","pages":[{"id":"d14-open:page-1","name":"Page 1","diagramKind":"flowchart","layers":[{"id":"default","name":"Default","visible":true,"locked":false}],"nodes":[],"connectors":[],"metadata":{},"extensions":{}}],"metadata":{},"extensions":{}}
 JSON
 # Without a desktop environment xdg-open types files with file(1) (application/json) and starts a browser; saying GNOME makes
 # it use gio, which reads the shared-mime-info glob like a real desktop does.
@@ -152,7 +152,7 @@ eval "$(xdotool getwindowgeometry --shell "$window")"
 echo "app window at $X,$Y ${WIDTH}x$HEIGHT"
 drop="$work/drop.openflow.json"
 cat > "$drop" <<'JSON'
-{"format":"canvas.scene","schemaVersion":1,"id":"d14-drop","name":"d14 xdnd drop","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","pages":[{"id":"d14-drop:page-1","name":"Page 1","diagramKind":"flowchart","layers":[{"id":"default","name":"Default","visible":true,"locked":false}],"nodes":[],"connectors":[],"metadata":{},"extensions":{}}],"metadata":{},"extensions":{}}
+{"format":"openflowkit.scene","schemaVersion":1,"id":"d14-drop","name":"d14 xdnd drop","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","pages":[{"id":"d14-drop:page-1","name":"Page 1","diagramKind":"flowchart","layers":[{"id":"default","name":"Default","visible":true,"locked":false}],"nodes":[],"connectors":[],"metadata":{},"extensions":{}}],"metadata":{},"extensions":{}}
 JSON
 timeout 60 python3 "$(dirname "$0")/app-xdnd-source.py" "file://$drop" 1500 100 >"$work/source.log" 2>&1 &
 source_pid=$!

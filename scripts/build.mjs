@@ -1,4 +1,4 @@
-// Builds the Canvas submodule (app + MCP server) and assembles server/ and app/ for publishing.
+// Builds the editor submodule (app + MCP server) and assembles server/ and app/ for publishing.
 import { spawnSync } from 'node:child_process';
 import { cp, mkdir, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';

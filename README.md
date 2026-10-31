@@ -231,14 +231,14 @@ Things to know:
 ## Projects and configuration
 
 A project is a name mapped to a folder, and a diagram is one `.openflow.json` file in it. The service reads
-`~/.config/canvas/service.json`, written on first run with one project, `scratch`, in
-`~/.local/share/canvas/diagrams`:
+`~/.config/openflowkit/service.json`, written on first run with one project, `scratch`, in
+`~/.local/share/openflowkit/diagrams`:
 
 ```json
 {
   "port": 43120,
   "projects": [
-    { "name": "scratch", "path": "/home/you/.local/share/canvas/diagrams" },
+    { "name": "scratch", "path": "/home/you/.local/share/openflowkit/diagrams" },
     { "name": "my-app", "path": "/home/you/code/my-app/diagrams" }
   ]
 }
@@ -253,11 +253,11 @@ diagrams.
 
 | Variable | Used by | Meaning |
 |---|---|---|
-| `CANVAS_SERVICE_CONFIG` | `canvas serve` | Config file path (same as `--config`). |
-| `CANVAS_APP_DIR` | `canvas serve` | The built editor to serve. Defaults to the one in this package. |
-| `CANVAS_SERVICE_URL` | the MCP server | Where to find the service if you changed the port, e.g. `http://127.0.0.1:43200`. |
-| `CANVAS_CHANNEL` | the MCP server | Set to `1` if your agent session was started with channels, so canvas comments reach the agent as they are written. |
-| `CANVAS_CLI_NAME` | the CLI | The command name shown in help and errors. Defaults to `canvas` here. |
+| `OPENFLOWKIT_SERVICE_CONFIG` | `canvas serve` | Config file path (same as `--config`). |
+| `OPENFLOWKIT_APP_DIR` | `canvas serve` | The built editor to serve. Defaults to the one in this package. |
+| `OPENFLOWKIT_SERVICE_URL` | the MCP server | Where to find the service if you changed the port, e.g. `http://127.0.0.1:43200`. |
+| `OPENFLOWKIT_CHANNEL` | the MCP server | Set to `1` if your agent session was started with channels, so canvas comments reach the agent as they are written. |
+| `OPENFLOWKIT_CLI_NAME` | the CLI | The command name shown in help and errors. Defaults to `canvas` here. |
 
 ## Connect an agent
 
@@ -284,7 +284,7 @@ an agent the whole flow.
 | Command | What it does |
 |---|---|
 | `canvas serve [--port N] [--config path] [--app dir]` | Run the service and the editor in the foreground. |
-| `canvas open [diagram] [--app\|--browser] [--print]` | Open a diagram, or the editor home, in the desktop app when it is installed, in your browser otherwise, starting the service if needed. The app is detected without launching it (the bundle id `sh.hyperlab.canvas` through Spotlight or the Applications folders on macOS, the `canvas://` handler elsewhere). `--app` requires the app, opens it on the editor home (`canvas://home`, also when the app is already running) when no diagram is named, and exits 1 if the app is missing (printing the install command for the platform, how to add the package repository or Scoop bucket, and the releases page) or cannot start; only an auto-detected app falls back to the browser when it fails to start (on Windows a failed app start is not detected). The app only reaches the service at `127.0.0.1:43120`, so with another `CANVAS_SERVICE_URL` the browser is used and `--app` is an error. `--browser` insists on the browser. `diagram` is a `.openflow.json` file in a project folder, `project/id`, or a diagram id or title; with none the editor home (`/#/home`) opens in the app when it is installed, else in the browser. `--print` writes the http link instead (`http://127.0.0.1:43120/#/home` with no diagram). |
+| `canvas open [diagram] [--app\|--browser] [--print]` | Open a diagram, or the editor home, in the desktop app when it is installed, in your browser otherwise, starting the service if needed. The app is detected without launching it (the bundle id `sh.hyperlab.canvas` through Spotlight or the Applications folders on macOS, the `canvas://` handler elsewhere). `--app` requires the app, opens it on the editor home (`canvas://home`, also when the app is already running) when no diagram is named, and exits 1 if the app is missing (printing the install command for the platform, how to add the package repository or Scoop bucket, and the releases page) or cannot start; only an auto-detected app falls back to the browser when it fails to start (on Windows a failed app start is not detected). The app only reaches the service at `127.0.0.1:43120`, so with another `OPENFLOWKIT_SERVICE_URL` the browser is used and `--app` is an error. `--browser` insists on the browser. `diagram` is a `.openflow.json` file in a project folder, `project/id`, or a diagram id or title; with none the editor home (`/#/home`) opens in the app when it is installed, else in the browser. `--print` writes the http link instead (`http://127.0.0.1:43120/#/home` with no diagram). |
 | `canvas service <install\|status\|restart\|logs\|uninstall>` | Run it in the background. |
 | `canvas mcp` | The MCP server on stdio, for agents. |
 | `canvas render <file> -o out.svg` | Mermaid, D2, Structurizr or OpenFlow DSL to SVG. |

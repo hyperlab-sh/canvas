@@ -148,7 +148,7 @@ function harness(overrides = {}) {
     program: ['/bin/canvas'], env: {}, platform: 'darwin', cwd: paths.root, wait: 600,
     fetchImpl: async (url) => {
       calls.fetch.push(url);
-      if (url.endsWith('/health')) { if (!up) throw new TypeError('fetch failed'); return { json: async () => ({ service: 'canvas-service', pid: 1 }) }; }
+      if (url.endsWith('/health')) { if (!up) throw new TypeError('fetch failed'); return { json: async () => ({ service: 'openflowkit-service', pid: 1 }) }; }
       if (url.endsWith('/projects')) return { json: async () => projects };
       throw new Error(`unexpected ${url}`);
     },
@@ -222,7 +222,7 @@ describe('runOpen', () => {
     assert.deepEqual(bare.calls.fetch, []);
   });
   it('starts the service when nothing answers, with the port from the URL', async () => {
-    const h = harness({ env: { CANVAS_SERVICE_URL: 'http://127.0.0.1:43999/' } });
+    const h = harness({ env: { OPENFLOWKIT_SERVICE_URL: 'http://127.0.0.1:43999/' } });
     h.setUp(false);
     assert.equal(await h.run(['notes/flow']), 0);
     assert.deepEqual(h.calls.started, [[['/bin/canvas'], '43999']]);
@@ -340,19 +340,19 @@ describe('runOpen', () => {
   }
   it('uses the browser without probing when the service is not at the default URL', async () => {
     let probed = false;
-    const h = harness({ env: { CANVAS_SERVICE_URL: 'http://127.0.0.1:43999' }, detectApp: () => { probed = true; return true; } });
+    const h = harness({ env: { OPENFLOWKIT_SERVICE_URL: 'http://127.0.0.1:43999' }, detectApp: () => { probed = true; return true; } });
     assert.equal(await h.run(['notes/flow']), 0);
     assert.deepEqual(h.calls.opened, [['open', 'http://127.0.0.1:43999/#/p/notes/flow']]);
     assert.equal(probed, false);
   });
   it('--app with a service at another URL is an error and opens nothing', async () => {
-    const h = harness({ env: { CANVAS_SERVICE_URL: 'http://127.0.0.1:43999' }, detectApp: () => true });
+    const h = harness({ env: { OPENFLOWKIT_SERVICE_URL: 'http://127.0.0.1:43999' }, detectApp: () => true });
     assert.equal(await h.run(['notes/flow', '--app']), 1);
     assert.match(h.lines.err.join('\n'), /only reaches the service at 127\.0\.0\.1:43120[\s\S]*--browser/);
     assert.deepEqual(h.calls.opened, []);
   });
   it('--app without a diagram and a service at another URL is the reachability error, not the install hint', async () => {
-    const h = harness({ env: { CANVAS_SERVICE_URL: 'http://127.0.0.1:43999' }, detectApp: () => false });
+    const h = harness({ env: { OPENFLOWKIT_SERVICE_URL: 'http://127.0.0.1:43999' }, detectApp: () => false });
     assert.equal(await h.run(['--app']), 1);
     const text = h.lines.err.join('\n');
     assert.match(text, /only reaches the service at 127\.0\.0\.1:43120/);

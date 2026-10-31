@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The canvas CLI: `canvas serve`, `canvas mcp`, `canvas service ...` and the rest of the Canvas CLI, pointed at
+// The canvas CLI: `canvas serve`, `canvas mcp`, `canvas service ...` and the rest of the OpenFlowKit CLI, pointed at
 // the app build shipped in this package. Runs on whatever runtime started it (node, or bun when invoked as `bun canvas`).
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -23,5 +23,5 @@ runCli({
   args,
   command,
   cli: fileURLToPath(new URL('../server/dist/cli.js', import.meta.url)),
-  appDir: process.env.CANVAS_APP_DIR ?? fileURLToPath(new URL('../app', import.meta.url)),
+  appDir: process.env.OPENFLOWKIT_APP_DIR ?? fileURLToPath(new URL('../app', import.meta.url)),
 });
