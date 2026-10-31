@@ -1,4 +1,4 @@
-[submodule "openflowkit"]
-	path = openflowkit
-	url = https://github.com/hyperlab-sh/openflowkit.git
+[submodule "editor"]
+	path = editor
+	url = https://github.com/hyperlab-sh/canvas-editor.git
 	branch = main

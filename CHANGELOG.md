@@ -2,9 +2,22 @@
 
 All notable changes are listed here, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/). Changes inside the editor and service come from the pinned
-`openflowkit` submodule; each release note names the fork commit it was built from.
+`editor` submodule (hyperlab-sh/canvas-editor, `openflowkit` before 0.5.0); each release note names the commit it was
+built from.
 
 ## [Unreleased]
+
+### Changed
+- **Rebrand to Canvas (breaking).** The editor is now hyperlab-sh/canvas-editor (was hyperlab-sh/openflowkit), built from
+  the `editor` submodule. Names changed with no fallback: env vars are `CANVAS_*` (was `OPENFLOWKIT_*`, e.g.
+  `CANVAS_SERVICE_CONFIG`, `CANVAS_SERVICE_URL`, `CANVAS_CHANNEL`), the service config is `~/.config/canvas/service.json`
+  and the default project folder `~/.local/share/canvas/diagrams`, `/health` reports `canvas-service`, and DSL source
+  files are `*.canvas` (was `*.ofk`; service diagrams stay `.openflow.json`). Move the old folders and rename old files by hand, then `canvas service restart`.
+- New logo, in the README, the desktop app icons and the editor.
+
+### Removed
+- The `paint-a-picture` skill and this repo's Claude Code plugin manifest. The skill now ships in the hyper plugin as
+  `/hyper:canvas`.
 
 ## [0.4.1]
 

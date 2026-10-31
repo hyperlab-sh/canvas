@@ -22,13 +22,13 @@ pub fn resolve_port(env_port: Option<&str>, config_text: Option<&str>) -> u16 {
         .unwrap_or(DEFAULT_PORT)
 }
 
-/// The service's config path: `OPENFLOWKIT_SERVICE_CONFIG`, else `~/.config/openflowkit/service.json`.
+/// The service's config path: `CANVAS_SERVICE_CONFIG`, else `~/.config/canvas/service.json`.
 fn config_path() -> Option<PathBuf> {
-    if let Some(path) = std::env::var_os("OPENFLOWKIT_SERVICE_CONFIG").filter(|path| !path.is_empty()) {
+    if let Some(path) = std::env::var_os("CANVAS_SERVICE_CONFIG").filter(|path| !path.is_empty()) {
         return Some(PathBuf::from(path));
     }
     let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
-    Some(PathBuf::from(home).join(".config").join("openflowkit").join("service.json"))
+    Some(PathBuf::from(home).join(".config").join("canvas").join("service.json"))
 }
 
 pub fn port() -> u16 {

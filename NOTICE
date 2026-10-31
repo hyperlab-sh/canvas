@@ -1,4 +1,4 @@
-@hyperlab.sh/canvas packages a build of a fork of OpenFlowKit
-(https://github.com/openflowkit/openflowkit), MIT licensed, included here as the
-`openflowkit` git submodule (https://github.com/hyperlab-sh/openflowkit).
-The original licence is in LICENSE.
+@hyperlab.sh/canvas packages a build of Canvas (https://github.com/hyperlab-sh/canvas-editor),
+included here as the `editor` git submodule. Canvas began as a fork of OpenFlowKit
+(https://github.com/openflowkit/openflowkit) by Varun, MIT licensed; its copyright notice is kept in
+the submodule's LICENSE.

@@ -19,7 +19,7 @@ pub fn is_service_response(raw: &str) -> bool {
     let Some(body) = raw.split_once("\r\n\r\n").map(|(_, body)| body) else { return false };
     let (Some(start), Some(end)) = (body.find('{'), body.rfind('}')) else { return false };
     serde_json::from_str::<serde_json::Value>(&body[start..=end])
-        .map(|json| json.get("service").and_then(|service| service.as_str()) == Some("openflowkit-service"))
+        .map(|json| json.get("service").and_then(|service| service.as_str()) == Some("canvas-service"))
         .unwrap_or(false)
 }
 
@@ -132,7 +132,7 @@ mod tests {
     use std::ffi::OsString;
     use std::net::TcpListener;
 
-    const HEALTH: &str = r#"{"ok":true,"service":"openflowkit-service","version":"0.3.0","port":43120,"projects":["scratch"],"pid":1}"#;
+    const HEALTH: &str = r#"{"ok":true,"service":"canvas-service","version":"0.3.0","port":43120,"projects":["scratch"],"pid":1}"#;
 
     fn response(status: &str, body: &str) -> String {
         format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len())
@@ -162,7 +162,7 @@ mod tests {
             response("200 OK", r#"{"service":"something-else"}"#),
             response("200 OK", r#"{"service":42}"#),
             "HTTP/1.1 200 OK\r\nno body separator".into(),
-            "FTP/1.1 200 OK\r\n\r\n{\"service\":\"openflowkit-service\"}".into(),
+            "FTP/1.1 200 OK\r\n\r\n{\"service\":\"canvas-service\"}".into(),
         ] {
             assert!(!is_service_response(&raw), "{raw:?}");
         }

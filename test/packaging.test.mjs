@@ -84,8 +84,8 @@ test('the Docker image runs canvas serve on all interfaces from the linux archiv
   assert.match(file, /^FROM debian:stable-slim$/m);
   assert.match(file, /amd64\) cpu=x64 ;; arm64\) cpu=arm64/);
   assert.match(file, /canvas-\$\{VERSION\}-linux-\$\{cpu\}\.tar\.gz/);
-  assert.match(file, /OPENFLOWKIT_SERVICE_HOST=0\.0\.0\.0/);
-  assert.match(file, /OPENFLOWKIT_SERVICE_CONFIG=\/data\/service\.json/);
+  assert.match(file, /CANVAS_SERVICE_HOST=0\.0\.0\.0/);
+  assert.match(file, /CANVAS_SERVICE_CONFIG=\/data\/service\.json/);
   assert.match(file, /^VOLUME \/data$/m);
   assert.match(file, /^USER canvas$/m);
   // The extracted archive lands where the symlink and the entrypoint expect it.

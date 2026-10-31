@@ -147,7 +147,7 @@ jobs:
           xattr -r "$app" || true
           if xattr -r "$app" | grep -q com.apple.quarantine; then echo "$app is still quarantined" >&2; exit 1; fi
 
-          export OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json"
+          export CANVAS_SERVICE_CONFIG="$RUNNER_TEMP/service.json"
           "$(brew --prefix)/bin/canvas" serve --port 43120 &
           serve=$!
           curl -fsS --retry 30 --retry-connrefused --retry-delay 1 -o /dev/null http://127.0.0.1:43120/health
