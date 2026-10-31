@@ -10,8 +10,8 @@ it shows `http://127.0.0.1:<port>`, where `canvas serve` (or `canvas service ins
   `/opt/homebrew/bin`, `/usr/local/bin`, `~/.bun/bin`, `~/.local/bin` and `~/.npm-global/bin` (on Windows
   also `%LOCALAPPDATA%\canvas\bin` and `%APPDATA%\npm`), because an app opened from the Finder, Dock or a menu
   gets a minimal `PATH`; no shell is started to find it.
-- **Port:** `CANVAS_PORT`, else `port` in the service config (`CANVAS_SERVICE_CONFIG`, default
-  `~/.config/canvas/service.json`), else `43120`. A port given only to `canvas service install --port N`
+- **Port:** `CANVAS_PORT`, else `port` in the service config (`OPENFLOWKIT_SERVICE_CONFIG`, default
+  `~/.config/openflowkit/service.json`), else `43120`. A port given only to `canvas service install --port N`
   lives in the launchd/systemd unit, not in either source: set `port` in the service config for the app to
   find it.
 - **Links:** `canvas://home` (or the bare `canvas://`) shows the editor home and brings the window to the front; `canvas://open/<project>/<id>` shows that diagram, on a cold start and in the running window

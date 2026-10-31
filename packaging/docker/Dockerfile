@@ -32,8 +32,8 @@ RUN ln -s /usr/lib/canvas/bin/canvas /usr/local/bin/canvas
 
 # Projects live in /data: the service config and the default scratch project are created there on first start.
 ENV HOME=/data \
-    CANVAS_SERVICE_CONFIG=/data/service.json \
-    CANVAS_SERVICE_HOST=0.0.0.0
+    OPENFLOWKIT_SERVICE_CONFIG=/data/service.json \
+    OPENFLOWKIT_SERVICE_HOST=0.0.0.0
 VOLUME /data
 USER canvas
 WORKDIR /data

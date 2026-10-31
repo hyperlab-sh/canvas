@@ -40,7 +40,7 @@ jobs:
 
       - name: The service serves the bundled app
         run: |
-          CANVAS_SERVICE_CONFIG="$RUNNER_TEMP/service.json" node bin/canvas.js serve --port 43555 &
+          OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" node bin/canvas.js serve --port 43555 &
           for _ in $(seq 1 20); do curl -fs http://127.0.0.1:43555/ > /dev/null && exit 0; sleep 1; done
           echo "service did not answer" >&2
           exit 1
@@ -80,11 +80,11 @@ jobs:
           home="$RUNNER_TEMP/canvas-home"
           CANVAS_HOME="$home" CANVAS_BIN_DIR="$RUNNER_TEMP/bin" CANVAS_VERSION="$version" CANVAS_DOWNLOAD_BASE="file://$PWD/release" sh install.sh
           # Only the system tools remain: the binary carries its own runtime.
-          env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" CANVAS_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$RUNNER_TEMP/bin/canvas" --version
+          env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$RUNNER_TEMP/bin/canvas" --version
           printf 'graph LR\n A-->B\n' > "$RUNNER_TEMP/a.mmd"
           env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" "$RUNNER_TEMP/bin/canvas" render "$RUNNER_TEMP/a.mmd" -o "$RUNNER_TEMP/a.svg"
           grep -q "<svg" "$RUNNER_TEMP/a.svg"
-          env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" CANVAS_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$RUNNER_TEMP/bin/canvas" serve --port 43556 &
+          env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$RUNNER_TEMP/bin/canvas" serve --port 43556 &
           for _ in $(seq 1 20); do curl -fs http://127.0.0.1:43556/ > /dev/null && exit 0; sleep 1; done
           echo "binary did not serve the app" >&2
           exit 1

@@ -94,12 +94,12 @@ jobs:
             canvas="$PWD/cli/bin/canvas"
           fi
           "$canvas" --version
-          CANVAS_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$canvas" serve --port 43120 &
+          OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$canvas" serve --port 43120 &
           curl -fsS --retry 30 --retry-connrefused --retry-delay 1 -o /dev/null http://127.0.0.1:43120/health
 
           smoke() { # <kind> <app>
             "$2" --version
-            CANVAS_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$2" --smoke | tee "smoke/smoke-$target-$1.json"
+            OPENFLOWKIT_SERVICE_CONFIG="$RUNNER_TEMP/service.json" "$2" --smoke | tee "smoke/smoke-$target-$1.json"
             node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8").trim().split("\n").pop()); if (!r.ok || !r.mounted) { console.error("the editor did not mount"); process.exit(1); }' "smoke/smoke-$target-$1.json"
           }
 
